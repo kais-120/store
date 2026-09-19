@@ -1,107 +1,91 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
-  VStack, HStack, Button, Text, Select, Input, FormControl, FormLabel, SimpleGrid, Box
+  Button, FormControl, FormLabel, Input, Select, VStack, HStack, Text, Box
 } from '@chakra-ui/react'
 import { formatMoney } from '../../utils/format'
 
-const methods = [
-  { id: 'نقدًا', label: 'نقدًا', emoji: '💵' },
-  { id: 'بطاقة', label: 'بطاقة', emoji: '💳' },
-  { id: 'بالدين', label: 'بالدين', emoji: '📝' },
-]
+const METHODS = ['نقدًا', 'بطاقة', 'بالدين']
 
 export default function PaymentModal({ isOpen, onClose, total, customers, onConfirm }) {
   const [method, setMethod] = useState('نقدًا')
   const [customerId, setCustomerId] = useState('walkin')
-  const [paidAmount, setPaidAmount] = useState('')
+  const [paid, setPaid] = useState('')
 
-  const selectedCustomer = useMemo(() => customers.find((c) => c.id === customerId), [customers, customerId])
-  const change = Math.max(0, Number(paidAmount || 0) - total)
-  const canConfirm = method !== 'بالدين' ? true : customerId !== 'walkin'
+  // reset every time the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setMethod('نقدًا')
+      setCustomerId('walkin')
+      setPaid('')
+    }
+  }, [isOpen])
+
+  const paidAmount = paid === '' ? total : Number(paid)
+  const change = method === 'نقدًا' ? Math.max(0, paidAmount - total) : 0
+
+  const needsCustomer = method === 'بالدين' && customerId === 'walkin'
+  const notEnoughCash = method === 'نقدًا' && paidAmount < total
+  const canConfirm = !needsCustomer && !notEnoughCash
 
   const handleConfirm = () => {
-    onConfirm({ method, customerId, paidAmount: Number(paidAmount || 0) })
-    setPaidAmount('')
-    setMethod('نقدًا')
-    setCustomerId('walkin')
+    if (!canConfirm) return
+    onConfirm({ method, customerId, paidAmount })
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
+    <Modal isOpen={isOpen} onClose={onClose} isCentered>
       <ModalOverlay />
       <ModalContent>
-        <ModalHeader fontWeight="800">إتمام عملية الدفع</ModalHeader>
+        <ModalHeader fontWeight="800">إتمام البيع</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
-          <VStack align="stretch" spacing={4}>
+          <VStack spacing={4} align="stretch">
             <Box bg="sand.100" borderRadius="lg" p={4} textAlign="center">
-              <Text fontSize="sm" color="ink.muted">المجموع النهائي</Text>
-              <Text fontSize="2xl" fontWeight="900" color="brand.600">{formatMoney(total)}</Text>
+              <Text fontSize="sm" color="ink.muted">المبلغ المطلوب</Text>
+              <Text fontSize="3xl" fontWeight="900" color="brand.600">{formatMoney(total)}</Text>
             </Box>
 
             <FormControl>
               <FormLabel fontSize="sm" fontWeight="700">طريقة الدفع</FormLabel>
-              <SimpleGrid columns={3} spacing={2}>
-                {methods.map((m) => (
-                  <Button
-                    key={m.id} size="sm" variant={method === m.id ? 'solid' : 'outline'}
-                    onClick={() => setMethod(m.id)}
-                  >
-                    {m.emoji} {m.label}
+              <HStack spacing={2}>
+                {METHODS.map((m) => (
+                  <Button key={m} flex="1" size="sm" variant={method === m ? 'solid' : 'outline'} onClick={() => setMethod(m)}>
+                    {m}
                   </Button>
                 ))}
-              </SimpleGrid>
+              </HStack>
             </FormControl>
 
-            {method === 'بالدين' && (
-              <FormControl isRequired>
-                <FormLabel fontSize="sm" fontWeight="700">اختيار الحريف</FormLabel>
-                <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                  <option value="walkin" disabled>اختر حريفًا...</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </Select>
-                {selectedCustomer && (
-                  <Text fontSize="xs" color="ink.muted" mt={1}>
-                    الدين الحالي: {formatMoney(selectedCustomer.debt)}
-                  </Text>
-                )}
-              </FormControl>
-            )}
+            <FormControl isRequired={method === 'بالدين'}>
+              <FormLabel fontSize="sm" fontWeight="700">الحريف</FormLabel>
+              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                <option value="walkin">حريف عابر</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+              {needsCustomer && (
+                <Text mt={1} fontSize="xs" color="red.500">اختر حريفًا مسجلاً لتسجيل البيع بالدين</Text>
+              )}
+            </FormControl>
 
             {method === 'نقدًا' && (
-              <SimpleGrid columns={2} spacing={3}>
-                <FormControl>
-                  <FormLabel fontSize="sm" fontWeight="700">المبلغ المدفوع</FormLabel>
-                  <Input type="number" min={0} value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0.000" />
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="sm" fontWeight="700">الباقي</FormLabel>
-                  <Input isReadOnly value={change.toFixed(3)} bg="sand.100" />
-                </FormControl>
-              </SimpleGrid>
-            )}
-
-            {method !== 'بالدين' && (
               <FormControl>
-                <FormLabel fontSize="sm" fontWeight="700">اختيار الحريف (اختياري)</FormLabel>
-                <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                  <option value="walkin">حريف عابر</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </Select>
+                <FormLabel fontSize="sm" fontWeight="700">المبلغ المدفوع</FormLabel>
+                <Input type="number" min={0} value={paid} onChange={(e) => setPaid(e.target.value)} placeholder={total.toFixed(3)} />
+                <HStack justify="space-between" mt={2}>
+                  <Text fontSize="sm" color="ink.muted">الباقي للحريف</Text>
+                  <Text fontSize="sm" fontWeight="800">{formatMoney(change)}</Text>
+                </HStack>
+                {notEnoughCash && (
+                  <Text mt={1} fontSize="xs" color="red.500">المبلغ المدفوع أقل من المجموع</Text>
+                )}
               </FormControl>
             )}
           </VStack>
         </ModalBody>
         <ModalFooter>
-          <HStack spacing={3} w="full">
-            <Button variant="ghost" onClick={onClose} flex="1">إلغاء</Button>
-            <Button flex="1" isDisabled={!canConfirm} onClick={handleConfirm}>إتمام البيع</Button>
-          </HStack>
+          <Button variant="ghost" onClick={onClose} me={3}>إلغاء</Button>
+          <Button onClick={handleConfirm} isDisabled={!canConfirm}>تأكيد الدفع</Button>
         </ModalFooter>
       </ModalContent>
     </Modal>

@@ -4,6 +4,7 @@ import {
   Button, FormControl, FormLabel, Input, Select, SimpleGrid
 } from '@chakra-ui/react'
 import { categories } from '../../data/products'
+import { isWeighedUnit, defaultStep, priceBasis } from '../../utils/format'
 
 const emptyForm = { name: '', category: 'food', price: '', purchasePrice: '', unit: 'قطعة', stock: '', minStock: '5', step: '1' }
 
@@ -12,13 +13,22 @@ export default function ProductFormModal({ isOpen, onClose, onSave, initialData 
 
   useEffect(() => {
     if (initialData) {
-      setForm({ ...initialData, price: String(initialData.price), purchasePrice: String(initialData.purchasePrice), stock: String(initialData.stock), minStock: String(initialData.minStock), step: String(initialData.step) })
+      setForm({
+        ...initialData,
+        price: String(initialData.price),
+        purchasePrice: String(initialData.purchasePrice),
+        stock: String(initialData.stock),
+        minStock: String(initialData.minStock),
+        step: String(initialData.step),
+      })
     } else {
       setForm(emptyForm)
     }
   }, [initialData, isOpen])
 
   const handleChange = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const weighed = isWeighedUnit(form.unit)
 
   const handleSubmit = () => {
     if (!form.name.trim() || !form.price) return
@@ -28,7 +38,8 @@ export default function ProductFormModal({ isOpen, onClose, onSave, initialData 
       purchasePrice: Number(form.purchasePrice || 0),
       stock: Number(form.stock || 0),
       minStock: Number(form.minStock || 5),
-      step: Number(form.step || 1),
+      // weighed products: 100 g / 100 ml steps
+      step: weighed ? defaultStep(form.unit) : Number(form.step || 1),
     })
     onClose()
   }
@@ -60,15 +71,15 @@ export default function ProductFormModal({ isOpen, onClose, onSave, initialData 
               </Select>
             </FormControl>
             <FormControl isRequired>
-              <FormLabel fontSize="sm" fontWeight="700">سعر الشراء</FormLabel>
+              <FormLabel fontSize="sm" fontWeight="700">{weighed ? `سعر الشراء (${priceBasis(form.unit)})` : 'سعر الشراء'}</FormLabel>
               <Input type="number" min={0} value={form.purchasePrice} onChange={handleChange('purchasePrice')} placeholder="0.000" />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel fontSize="sm" fontWeight="700">سعر البيع</FormLabel>
+              <FormLabel fontSize="sm" fontWeight="700">{weighed ? `سعر البيع (${priceBasis(form.unit)})` : 'سعر البيع'}</FormLabel>
               <Input type="number" min={0} value={form.price} onChange={handleChange('price')} placeholder="0.000" />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel fontSize="sm" fontWeight="700">الكمية الحالية</FormLabel>
+              <FormLabel fontSize="sm" fontWeight="700">{weighed ? `الكمية الحالية (${form.unit})` : 'الكمية الحالية'}</FormLabel>
               <Input type="number" min={0} value={form.stock} onChange={handleChange('stock')} />
             </FormControl>
             <FormControl>

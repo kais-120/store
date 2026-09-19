@@ -4,7 +4,7 @@ import { initialCustomers, walkInCustomer } from '../data/customers'
 import { initialSuppliers, initialPurchases } from '../data/suppliers'
 import { initialSales } from '../data/sales'
 import { dashboardStats, initialActivity } from '../data/dashboard'
-import { todayISO, nowTime } from '../utils/format'
+import { todayISO, nowTime, lineTotal } from '../utils/format'
 
 const AppContext = createContext(null)
 
@@ -97,7 +97,7 @@ export function AppProvider({ children }) {
   }, [purchases.length, pushActivity])
 
   const completeSale = useCallback(({ cart, customerId, method, paidAmount, discount }) => {
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0)
+    const subtotal = cart.reduce((sum, item) => sum + lineTotal(item), 0)
     const total = Math.max(0, subtotal - (discount || 0))
     const invoiceId = `F-${1049 + sales.length}`
     const customer = customerId && customerId !== 'walkin' ? customers.find((c) => c.id === customerId) : walkInCustomer
