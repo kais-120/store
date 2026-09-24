@@ -11,9 +11,10 @@ import ProductFormModal from '../components/tables/ProductFormModal'
 import { useApp } from '../context/AppContext'
 import { categories, stockStatus } from '../data/products'
 import { formatMoney } from '../utils/format'
+import useFetchData from '../hook/useFetchData'
+import { createProduct, deleteProduct, getProducts, updateProduct } from '../services/api'
 
 export default function Inventory() {
-  const { products, addProduct, updateProduct, deleteProduct } = useApp()
   const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclosure()
   const confirmDisclosure = useDisclosure()
@@ -24,7 +25,12 @@ export default function Inventory() {
   const [editing, setEditing] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
-  const filtered = useMemo(() => products.filter((p) => {
+  // used purely as a "refetch trigger" for useFetchData
+  const [isSaving, setIsSaving] = useState(false)
+
+  const { data: products, isLoading } = useFetchData(getProducts, isSaving)
+
+  const filtered = useMemo(() => (products || []).filter((p) => {
     const matchCat = category === 'all' || p.category === category
     const matchQuery = p.name.toLowerCase().includes(query.trim().toLowerCase())
     return matchCat && matchQuery
@@ -33,14 +39,16 @@ export default function Inventory() {
   const openAdd = () => { setEditing(null); onOpen() }
   const openEdit = (p) => { setEditing(p); onOpen() }
 
-  const handleSave = (data) => {
+  const handleSave = async (data) => {
     if (editing) {
-      updateProduct(editing.id, data)
+      await updateProduct(editing.id, data)
       toast({ title: 'تم تعديل المنتج بنجاح', status: 'success', duration: 2000 })
     } else {
-      addProduct(data)
+      await createProduct(data)
       toast({ title: 'تمت إضافة المنتج بنجاح', status: 'success', duration: 2000 })
     }
+    // flip the flag so useFetchData's useEffect dependency changes and refetches
+    setIsSaving((prev) => !prev)
   }
 
   const confirmDelete = (p) => { setDeleteTarget(p); confirmDisclosure.onOpen() }
@@ -48,13 +56,14 @@ export default function Inventory() {
     if (deleteTarget) {
       deleteProduct(deleteTarget.id)
       toast({ title: 'تم حذف المنتج', status: 'info', duration: 2000 })
+      setIsSaving((prev) => !prev)
     }
   }
 
   return (
     <Box>
       <PageHeader
-        title="المخزون" subtitle={`${products.length} منتج مسجل`}
+        title="المخزون" subtitle={`${(products || []).length} منتج مسجل`}
         actions={<Button leftIcon={<Plus size={16} />} onClick={openAdd}>إضافة منتج</Button>}
       />
 
@@ -70,7 +79,7 @@ export default function Inventory() {
 
       <Card>
         <CardBody overflowX="auto">
-          {filtered.length === 0 ? <EmptyState text="لا توجد منتجات مطابقة" /> : (
+          {isLoading ? null : filtered.length === 0 ? <EmptyState text="لا توجد منتجات مطابقة" /> : (
             <Table size="sm">
               <Thead>
                 <Tr>
@@ -94,7 +103,7 @@ export default function Inventory() {
                       <Td>{catLabel}</Td>
                       <Td>{p.stock}</Td>
                       <Td>{p.unit}</Td>
-                      <Td>{formatMoney(p.purchasePrice)}</Td>
+                      <Td>{formatMoney(p.purchase_price)}</Td>
                       <Td fontWeight="700">{formatMoney(p.price)}</Td>
                       <Td><Badge bg={`${status.color}.500`} color="white">{status.label}</Badge></Td>
                       <Td>

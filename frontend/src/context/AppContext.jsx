@@ -109,7 +109,7 @@ export function AppProvider({ children }) {
 
     setSales((prev) => [{ id: invoiceId, customer: customer?.name || 'حريف عابر', amount: total, method, time: nowTime() }, ...prev])
 
-    if (method === 'نقدًا' || method === 'بطاقة') {
+    if (method === 'نقدًا' ) {
       setCashbox((prev) => prev + total)
       setIncomes((prev) => [{ id: `in${Date.now()}`, label: `مبيعات - ${invoiceId}`, amount: total, date: todayISO() }, ...prev])
     } else if (method === 'بالدين' && customerId && customerId !== 'walkin') {

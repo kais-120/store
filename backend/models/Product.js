@@ -42,7 +42,7 @@ const Product = sequelize.define(
       defaultValue: 0,
     },
 
-    minStock: {
+    min_stock: {
       type: DataTypes.DECIMAL(10, 3),
       allowNull: false,
       defaultValue: 0,

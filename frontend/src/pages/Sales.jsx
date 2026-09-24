@@ -10,11 +10,17 @@ import PaymentModal from '../components/pos/PaymentModal'
 import { useApp } from '../context/AppContext'
 import { categories } from '../data/products'
 import { formatMoney, lineTotal, startQty } from '../utils/format'
+import { getProducts } from '../services/api'
+import useFetchData from '../hook/useFetchData'
 
 export default function Sales() {
-  const { products, customers, completeSale } = useApp()
+  const { customers, completeSale } = useApp()
   const toast = useToast()
-  const { isOpen, onOpen, onClose } = useDisclosure()
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isSaving,setIsSaving] = useState(false)
+  const { data: products, isLoading } = useFetchData(getProducts, isSaving)
+
+
 
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')

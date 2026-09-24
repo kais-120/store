@@ -4,33 +4,39 @@ import {
   Button, FormControl, FormLabel, Input, Select, VStack, HStack, Text, Box
 } from '@chakra-ui/react'
 import { formatMoney } from '../../utils/format'
+import { createSale } from '../../services/api'
 
-const METHODS = ['نقدًا', 'بطاقة', 'بالدين']
+const METHODS = [{key:'cash',label:"نقدا"}, {key:'debt',label:"بالدين"}]
 
 export default function PaymentModal({ isOpen, onClose, total, customers, onConfirm }) {
-  const [method, setMethod] = useState('نقدًا')
-  const [customerId, setCustomerId] = useState('walkin')
+  const [method, setMethod] = useState('cash')
+  const [customerId, setCustomerId] = useState(null)
   const [paid, setPaid] = useState('')
 
   // reset every time the modal opens
   useEffect(() => {
     if (isOpen) {
-      setMethod('نقدًا')
-      setCustomerId('walkin')
+      setMethod('cash')
+      setCustomerId(null)
       setPaid('')
     }
   }, [isOpen])
 
   const paidAmount = paid === '' ? total : Number(paid)
-  const change = method === 'نقدًا' ? Math.max(0, paidAmount - total) : 0
+  const change = method === 'cash' ? Math.max(0, paidAmount - total) : 0
 
-  const needsCustomer = method === 'بالدين' && customerId === 'walkin'
-  const notEnoughCash = method === 'نقدًا' && paidAmount < total
+  const needsCustomer = method === 'debt' && customerId === null
+  const notEnoughCash = method === 'cash' && paidAmount < total
   const canConfirm = !needsCustomer && !notEnoughCash
 
   const handleConfirm = () => {
     if (!canConfirm) return
-    onConfirm({ method, customerId, paidAmount })
+    const payload = {
+      customer_id : customerId,
+      total_amount : paidAmount,
+      payment_method : method
+    }
+    createSale(payload)
   }
 
   return (
@@ -50,17 +56,17 @@ export default function PaymentModal({ isOpen, onClose, total, customers, onConf
               <FormLabel fontSize="sm" fontWeight="700">طريقة الدفع</FormLabel>
               <HStack spacing={2}>
                 {METHODS.map((m) => (
-                  <Button key={m} flex="1" size="sm" variant={method === m ? 'solid' : 'outline'} onClick={() => setMethod(m)}>
-                    {m}
+                  <Button key={m.key} flex="1" size="sm"  variant={method === m.key ? 'solid' : 'outline'} onClick={() => setMethod(m.key)}>
+                    {m.label}
                   </Button>
                 ))}
               </HStack>
             </FormControl>
 
-            <FormControl isRequired={method === 'بالدين'}>
+            <FormControl isRequired={method === 'debt'}>
               <FormLabel fontSize="sm" fontWeight="700">الحريف</FormLabel>
               <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                <option value="walkin">حريف عابر</option>
+                <option value="">حريف عابر</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
               {needsCustomer && (
@@ -68,7 +74,7 @@ export default function PaymentModal({ isOpen, onClose, total, customers, onConf
               )}
             </FormControl>
 
-            {method === 'نقدًا' && (
+            {method === 'cash' && (
               <FormControl>
                 <FormLabel fontSize="sm" fontWeight="700">المبلغ المدفوع</FormLabel>
                 <Input type="number" min={0} value={paid} onChange={(e) => setPaid(e.target.value)} placeholder={total.toFixed(3)} />

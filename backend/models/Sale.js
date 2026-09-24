@@ -6,9 +6,9 @@ const Sale = sequelize.define(
   "sales",
   {
     id: {
-      type: DataTypes.STRING,
+      type: DataTypes.BIGINT,
       primaryKey: true,
-      allowNull: false,
+      autoIncrement:true
     },
 
     customer_id: {
@@ -34,8 +34,7 @@ const Sale = sequelize.define(
     },
 
     date: {
-      type: DataTypes.DATE,
-      allowNull: false,
+      type: DataTypes.DATEONLY,
       defaultValue: DataTypes.NOW,
     },
   },

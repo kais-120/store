@@ -99,7 +99,7 @@ export default function Dashboard() {
                     <Td>{s.customer}</Td>
                     <Td>{formatMoney(s.amount)}</Td>
                     <Td>
-                      <Badge colorScheme={s.method === 'بالدين' ? 'red' : s.method === 'بطاقة' ? 'blue' : 'green'}>
+                      <Badge colorScheme={s.method === 'بالدين' ? 'red' : 'green'}>
                         {s.method}
                       </Badge>
                     </Td>
