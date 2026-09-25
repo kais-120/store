@@ -13,7 +13,7 @@ const PurchaseItem = sequelize.define(
     },
 
     purchase_id: {
-      type: DataTypes.STRING,
+      type: DataTypes.BIGINT,
       allowNull: false,
       references: {
         model: Purchase,

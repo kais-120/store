@@ -2,6 +2,10 @@ const { Op } = require("sequelize");
 const { body, param, query, matchedData, validationResult } = require("express-validator");
 const Purchase = require("../models/purchase");
 const Supplier = require("../models/Supplier");
+const PurchaseItem = require("../models/PurchaseItem");
+const Product = require("../models/Product");
+const sequelize = require("../config/db");
+const { SupplierTransaction } = require("../models");
 
 const FIELDS = ["id", "supplier_id", "total_amount", "status", "date"];
 const UPDATABLE = FIELDS.filter((f) => f !== "id");
@@ -63,6 +67,13 @@ exports.getPurchases = [
     else if (to) where.date = { [Op.lte]: to };
 
     const { rows, count } = await Purchase.findAndCountAll({
+      include:[
+        {
+          model:Supplier,
+          as:"supplier",
+          attributes:["id","name"]
+        }
+      ],
       where,
       limit,
       offset: (page - 1) * limit,
@@ -92,32 +103,135 @@ exports.getPurchaseById = [
 ];
 
 // ---------- POST /api/purchases ----------
-exports.createPurchase = [
-  // id is a STRING primary key (no auto-increment), so the client must send it
-  required(body("id"), "id is required")
-    .isString().withMessage("id must be a string")
-    .trim().notEmpty().withMessage("id cannot be empty")
-    .isLength({ max: 255 }).withMessage("id is too long"),
+const createPurchaseRules = [
 
-  ...purchaseRules(true),
+  body("supplier_id")
+    .notEmpty().withMessage("supplier_id is required"),
+
+  body("date")
+    .notEmpty().withMessage("date is required")
+    .isISO8601().withMessage("date must be a valid date"),
+
+  body("status")
+    .optional()
+    .isIn(["paid", "debt", "pending"]).withMessage("invalid status"),
+
+  body("items")
+    .isArray({ min: 1 }).withMessage("items must be a non-empty array"),
+
+  body("items.*.product_id")
+    .notEmpty().withMessage("product_id is required for every item"),
+
+  body("items.*.quantity")
+    .isFloat({ gt: 0 }).withMessage("quantity must be greater than 0"),
+
+  body("items.*.purchase_price")
+    .isFloat({ gt: 0 }).withMessage("purchase_price must be greater than 0"),
+];
+
+exports.createPurchase = [
+  ...createPurchaseRules,
 
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return validationError(res, errors.array());
 
-    // matchedData keeps only validated fields (protects against mass assignment)
     const data = matchedData(req, { locations: ["body"], includeOptionals: false });
 
-    if (await Purchase.findByPk(data.id)) {
-      return res.status(409).json({ success: false, message: "A purchase with this id already exists" });
+    // Prevent duplicate products within the same purchase
+    const productIds = data.items.map((item) => String(item.product_id));
+    const uniqueProductIds = new Set(productIds);
+    if (uniqueProductIds.size !== productIds.length) {
+      return validationError(res, [{ path: "items", msg: "Duplicate product in items list" }]);
     }
 
-    if (!(await Supplier.findByPk(data.supplier_id))) {
-      return validationError(res, [{ path: "supplier_id", msg: "Supplier not found" }]);
+    // Check all products exist
+    const products = await Product.findAll({ where: { id: [...uniqueProductIds] } });
+    if (products.length !== uniqueProductIds.size) {
+      const foundIds = new Set(products.map((p) => String(p.id)));
+      const missing = [...uniqueProductIds].filter((id) => !foundIds.has(id));
+      return validationError(
+        res,
+        missing.map((id) => ({ path: "items", msg: `Product not found: ${id}` }))
+      );
     }
 
-    const purchase = await Purchase.create(data, { fields: FIELDS });
-    res.status(201).json({ success: true, data: purchase });
+    // Compute totals server-side (never trust client-sent totals)
+    const itemsWithTotals = data.items.map((item) => {
+      const quantity = Number(item.quantity);
+      const purchase_price = Number(item.purchase_price);
+      return {
+        product_id: item.product_id,
+        quantity,
+        purchase_price,
+        total: quantity * purchase_price,
+      };
+    });
+
+    const totalAmount = itemsWithTotals.reduce((sum, item) => sum + item.total, 0);
+    const status = data.status || "pending";
+
+    const transaction = await sequelize.transaction();
+    try {
+      // Lock the supplier row for the duration of the transaction
+      const supplier = await Supplier.findByPk(data.supplier_id, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!supplier) {
+        await transaction.rollback();
+        return validationError(res, [{ path: "supplier_id", msg: "Supplier not found" }]);
+      }
+
+      const purchase = await Purchase.create(
+        {
+          supplier_id: data.supplier_id,
+          date: data.date,
+          status,
+          total_amount: totalAmount,
+        },
+        { transaction }
+      );
+
+      const createdItems = await PurchaseItem.bulkCreate(
+        itemsWithTotals.map((item) => ({
+          purchase_id: purchase.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          purchase_price: item.purchase_price,
+          total: item.total,
+        })),
+        { transaction }
+      );
+
+      // Debt purchases increase what we owe the supplier
+      if (status === "debt") {
+        await SupplierTransaction.create(
+          {
+            supplier_id: data.supplier_id,
+            type: "purchase",
+            amount: totalAmount,
+            date: data.date,
+          },
+          { transaction }
+        );
+        await supplier.increment("balance", { by: totalAmount, transaction });
+      }
+
+      await transaction.commit();
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          ...purchase.toJSON(),
+          items: createdItems,
+        },
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error("createPurchase error:", error);
+      return res.status(500).json({ success: false, message: "Failed to create purchase" });
+    }
   },
 ];
 

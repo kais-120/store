@@ -1,7 +1,7 @@
 import React from 'react'
 import {
   SimpleGrid, Grid, GridItem, Card, CardHeader, CardBody, Heading, Table, Thead, Tbody, Tr, Th, Td,
-  Badge, VStack, HStack, Text, Box
+  Badge, VStack, HStack, Text, Box, Spinner, Center
 } from '@chakra-ui/react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { DollarSign, Receipt, TrendingUp, Wallet, Users, Truck, Clock } from 'lucide-react'
@@ -10,11 +10,19 @@ import PageHeader from '../components/common/PageHeader'
 import { useApp } from '../context/AppContext'
 import { formatMoney } from '../utils/format'
 import { stockStatus } from '../data/products'
-import { salesTrend } from '../data/dashboard'
+// `salesTrend` no longer imported statically — it now comes from context (live API data)
 
 export default function Dashboard() {
-  const { stats, sales, products, activity } = useApp()
+  const { stats, sales, products, activity, salesTrend, loading } = useApp()
   const lowStockProducts = products.filter((p) => stockStatus(p).key !== 'ok').slice(0, 6)
+
+  if (loading) {
+    return (
+      <Center h="60vh">
+        <Spinner size="xl" color="brand.500" />
+      </Center>
+    )
+  }
 
   return (
     <Box>

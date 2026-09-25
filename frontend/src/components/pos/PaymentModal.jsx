@@ -31,12 +31,7 @@ export default function PaymentModal({ isOpen, onClose, total, customers, onConf
 
   const handleConfirm = () => {
     if (!canConfirm) return
-    const payload = {
-      customer_id : customerId,
-      total_amount : paidAmount,
-      payment_method : method
-    }
-    createSale(payload)
+      onConfirm({ method, customerId, paidAmount:total })
   }
 
   return (

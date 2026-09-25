@@ -16,7 +16,7 @@ const validationSchema = Yup.object({
     .required('رقم الهاتف مطلوب'),
 })
 
-export default function CustomerFormModal({ isOpen, onClose, onSave, initialData }) {
+export default function SupplierFormModal({ isOpen, onClose, onSave, initialData,isSaving }) {
   const formik = useFormik({
     initialValues: {
       name: initialData?.name || '',
@@ -54,13 +54,13 @@ export default function CustomerFormModal({ isOpen, onClose, onSave, initialData
       <ModalOverlay />
       <ModalContent as="form" onSubmit={formik.handleSubmit} noValidate>
         <ModalHeader fontWeight="800">
-          {initialData ? 'تعديل بيانات الحريف' : 'إضافة حريف جديد'}
+          {initialData ? 'تعديل بيانات مورد' : 'إضافة مورد جديد'}
         </ModalHeader>
         <ModalCloseButton />
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <FormControl isRequired isInvalid={formik.touched.name && !!formik.errors.name}>
-              <FormLabel fontSize="sm" fontWeight="700">الاسم الكامل</FormLabel>
+              <FormLabel fontSize="sm" fontWeight="700">الاسم مورد</FormLabel>
               <Input
                 name="name"
                 value={formik.values.name}

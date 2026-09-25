@@ -1,6 +1,8 @@
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 const { body, param, query, matchedData, validationResult } = require("express-validator");
 const Supplier = require("../models/Supplier");
+const { SupplierTransaction } = require("../models");
+const sequelize = require("../config/db");
 
 const FIELDS = ["name", "phone"];
 
@@ -55,6 +57,17 @@ exports.getSuppliers = [
 
     const { rows, count } = await Supplier.findAndCountAll({
       where,
+      attributes: {
+        include: [
+          [
+            Sequelize.literal(`(
+              SELECT COALESCE(SUM(total_amount), 0) FROM purchases
+              WHERE purchases.supplier_id = suppliers.id
+            )`),
+            "totalPurchases",
+          ],
+        ],
+      },
       limit,
       offset: (page - 1) * limit,
       order: [["createdAt", "DESC"]],
@@ -145,5 +158,52 @@ exports.deleteSupplier = [
     }
 
     res.json({ success: true, message: "Supplier deleted" });
+  },
+];
+exports.paySupplierDebt = [
+  body("supplier_id").isInt({ min: 1 }).toInt(),
+  body("amount").isFloat({ gt: 0 }).toFloat(),
+  body("note").optional().isString().trim(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return validationError(res, errors.array());
+
+    const { supplier_id, amount, note } = matchedData(req, { locations: ["body"] });
+
+    const t = await sequelize.transaction();
+    try {
+      const supplier = await Supplier.findByPk(supplier_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!supplier) {
+        await t.rollback();
+        return res.status(404).json({ success: false, message: "Supplier not found" });
+      }
+
+      if (amount > supplier.balance) {
+        await t.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Payment exceeds remaining debt (${Number(supplier.balance).toFixed(3)})`,
+        });
+      }
+
+      const payment = await SupplierTransaction.create(
+        { supplier_id, type: "payment", amount, note },
+        { transaction: t }
+      );
+
+      await supplier.decrement("balance", { by: amount, transaction: t });
+      await supplier.reload({ transaction: t });
+
+      await t.commit();
+
+      res.status(201).json({
+        success: true,
+        data: payment,
+        remainingDebt: supplier.balance,
+      });
+    } catch (err) {
+      await t.rollback();
+      res.status(500).json({ success: false, message: "Failed to register payment" });
+    }
   },
 ];

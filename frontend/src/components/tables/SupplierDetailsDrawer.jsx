@@ -1,44 +1,40 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
-  Drawer, DrawerOverlay, DrawerContent, DrawerHeader, DrawerCloseButton, DrawerBody, DrawerFooter,
+  Drawer, DrawerOverlay, DrawerContent, DrawerHeader, DrawerCloseButton, DrawerBody,
   VStack, HStack, Text, Stat, StatLabel, StatNumber, SimpleGrid, Input, Button, Divider, Box,
   useToast, FormControl, FormErrorMessage
 } from '@chakra-ui/react'
 import { Formik, Form, Field } from 'formik'
 import * as Yup from 'yup'
 import { formatMoney } from '../../utils/format'
-import { payCustomerDebt } from '../../services/api'
+import { paySupplierDebt } from '../../services/api'
 
-export default function CustomerDetailsDrawer({ isOpen, onClose, customer, onRegisterPayment }) {
+export default function SupplierDetailsDrawer({ isOpen, onClose, supplier, onRegisterPayment }) {
   const toast = useToast()
 
-  if (!customer) return null
+  if (!supplier) return null
 
   const paymentSchema = Yup.object().shape({
     amount: Yup.number()
       .typeError('أدخل رقمًا صحيحًا')
       .required('المبلغ مطلوب')
       .moreThan(0, 'يجب أن يكون المبلغ أكبر من صفر')
-      .max(customer.debt, `المبلغ يتجاوز الدين المتبقي (${formatMoney(customer.debt)})`),
+      .max(supplier.balance, `المبلغ يتجاوز الدين المستحق (${formatMoney(supplier.balance)})`),
   })
 
   const handlePay = async (values, { setSubmitting, resetForm }) => {
     const amount = Number(values.amount)
 
     try {
-      const { data } = await payCustomerDebt({
-        customer_id: customer.id,
+      const { data } = await paySupplierDebt({
+        supplier_id: supplier.id,
         amount,
       })
 
-      onRegisterPayment(customer.id, amount, data)
+      onRegisterPayment(supplier.id, amount, data)
       resetForm()
 
-      toast({
-        title: 'تم تسجيل الدفعة',
-        status: 'success',
-        duration: 2000,
-      })
+      toast({ title: 'تم تسجيل الدفعة', status: 'success', duration: 2000 })
     } catch (err) {
       toast({
         title: 'فشل تسجيل الدفعة',
@@ -56,31 +52,29 @@ export default function CustomerDetailsDrawer({ isOpen, onClose, customer, onReg
       <DrawerOverlay />
       <DrawerContent>
         <DrawerCloseButton />
-        <DrawerHeader fontWeight="800">{customer.name}</DrawerHeader>
+        <DrawerHeader fontWeight="800">{supplier.name}</DrawerHeader>
         <DrawerBody>
           <VStack align="stretch" spacing={5}>
             <SimpleGrid columns={2} spacing={4}>
               <Box bg="sand.100" borderRadius="lg" p={3}>
                 <Stat>
                   <StatLabel fontSize="xs">إجمالي المشتريات</StatLabel>
-                  <StatNumber fontSize="lg">{formatMoney(customer.totalPurchases)}</StatNumber>
+                  <StatNumber fontSize="lg">{formatMoney(supplier.totalPurchases)}</StatNumber>
                 </Stat>
               </Box>
               <Box bg="sand.100" borderRadius="lg" p={3}>
                 <Stat>
-                  <StatLabel fontSize="xs">الدين الحالي</StatLabel>
-                  <StatNumber fontSize="lg" color={customer.debt > 0 ? 'brick.500' : 'olive.500'}>{formatMoney(customer.debt)}</StatNumber>
+                  <StatLabel fontSize="xs">الدين المستحق</StatLabel>
+                  <StatNumber fontSize="lg" color={supplier.balance > 0 ? 'brick.500' : 'olive.500'}>
+                    {formatMoney(supplier.balance)}
+                  </StatNumber>
                 </Stat>
               </Box>
             </SimpleGrid>
 
             <VStack align="stretch" spacing={1}>
               <Text fontSize="sm" color="ink.muted">رقم الهاتف</Text>
-              <Text fontWeight="700">{customer.phone}</Text>
-            </VStack>
-            <VStack align="stretch" spacing={1}>
-              <Text fontSize="sm" color="ink.muted">آخر عملية شراء</Text>
-              <Text fontWeight="700">{customer.lastPurchase}</Text>
+              <Text fontWeight="700">{supplier.phone}</Text>
             </VStack>
 
             <Divider />
@@ -103,15 +97,11 @@ export default function CustomerDetailsDrawer({ isOpen, onClose, customer, onReg
                           min={0}
                           step="0.001"
                           placeholder="0.000"
-                          isDisabled={isSubmitting || customer.debt <= 0}
+                          isDisabled={isSubmitting || supplier.balance <= 0}
                         />
                         <FormErrorMessage>{errors.amount}</FormErrorMessage>
                       </FormControl>
-                      <Button
-                        type="submit"
-                        isDisabled={customer.debt <= 0}
-                        isLoading={isSubmitting}
-                      >
+                      <Button type="submit" isDisabled={supplier.balance <= 0} isLoading={isSubmitting}>
                         تسجيل
                       </Button>
                     </HStack>

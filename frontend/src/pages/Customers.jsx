@@ -11,19 +11,25 @@ import CustomerFormModal from '../components/tables/CustomerFormModal'
 import CustomerDetailsDrawer from '../components/tables/CustomerDetailsDrawer'
 import { useApp } from '../context/AppContext'
 import { formatMoney } from '../utils/format'
+import useFetchData from '../hook/useFetchData'
+import { createCustomer, getCustomers, updateCustomer } from '../services/api'
 
 export default function Customers() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer, registerCustomerPayment } = useApp()
+  const { deleteCustomer, registerCustomerPayment } = useApp()
   const toast = useToast()
   const formDisclosure = useDisclosure()
   const detailsDisclosure = useDisclosure()
   const confirmDisclosure = useDisclosure()
   const cancelRef = useRef()
-
+  
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
   const [viewing, setViewing] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  
+  const {data:customers} = useFetchData(getCustomers,isSaving)
 
   const filtered = useMemo(() => customers.filter((c) =>
     c.name.toLowerCase().includes(query.trim().toLowerCase()) || c.phone.includes(query.trim())
@@ -34,13 +40,22 @@ export default function Customers() {
   const openDetails = (c) => { setViewing(c); detailsDisclosure.onOpen() }
 
   const handleSave = (data) => {
+    try{
+      setIsSaving(true)
     if (editing) {
       updateCustomer(editing.id, data)
       toast({ title: 'تم تعديل بيانات الحريف', status: 'success', duration: 2000 })
     } else {
-      addCustomer(data)
+      createCustomer(data)
       toast({ title: 'تمت إضافة الحريف بنجاح', status: 'success', duration: 2000 })
     }
+  }catch{
+      toast({ title: 'حدث خطأ أثناء حفظ بيانات الحريف', status: 'error', duration: 2000 })
+
+  }finally{
+      setIsSaving(false)
+
+  }
   }
 
   const confirmDelete = (c) => { setDeleteTarget(c); confirmDisclosure.onOpen() }
@@ -85,7 +100,7 @@ export default function Customers() {
                     <Td fontWeight="600">{c.name}</Td>
                     <Td>{c.phone}</Td>
                     <Td>{formatMoney(c.totalPurchases)}</Td>
-                    <Td fontWeight="700" color={c.debt > 0 ? 'brick.500' : 'olive.500'}>{formatMoney(c.debt)}</Td>
+                    <Td fontWeight="700" color={c.debt > 0 ? 'brick.500' : 'olive.500'}>{formatMoney(c.balance)}</Td>
                     <Td>{c.lastPurchase}</Td>
                     <Td>
                       <HStack spacing={1}>

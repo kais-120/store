@@ -101,7 +101,7 @@ export default function Inventory() {
                     <Tr key={p.id}>
                       <Td fontWeight="600">{p.name}</Td>
                       <Td>{catLabel}</Td>
-                      <Td>{p.stock}</Td>
+                      <Td>{Number(p.stock)}</Td>
                       <Td>{p.unit}</Td>
                       <Td>{formatMoney(p.purchase_price)}</Td>
                       <Td fontWeight="700">{formatMoney(p.price)}</Td>

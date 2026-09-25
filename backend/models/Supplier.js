@@ -14,6 +14,11 @@ const Supplier = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    balance: {
+      type: DataTypes.DECIMAL(10, 3),
+      allowNull: false,
+      defaultValue: 0,
+    },
 
     phone: {
       type: DataTypes.STRING(8),

@@ -2,6 +2,7 @@ const { Op } = require("sequelize");
 const { body, param, query, matchedData, validationResult } = require("express-validator");
 const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
+const sequelize = require("../config/db");
 
 const FIELDS = ["customer_id", "total_amount", "payment_method"];
 const PAYMENT_METHODS = ["cash", "debt"];
@@ -104,21 +105,35 @@ exports.createSale = [
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return validationError(res, errors.array());
-    try{
-    const data = matchedData(req, { locations: ["body"], includeOptionals: false });
 
+    const t = await sequelize.transaction();
+    try {
+      const data = matchedData(req, { locations: ["body"], includeOptionals: false });
 
-    if (data.customer_id && !(await Customer.findByPk(data.customer_id))) {
-      return validationError(res, [{ path: "customer_id", msg: "Customer not found" }]);
+      let customer = null;
+      if (data.customer_id) {
+        customer = await Customer.findByPk(data.customer_id, { transaction: t, lock: t.LOCK.UPDATE });
+        if (!customer) {
+          await t.rollback();
+          return validationError(res, [{ path: "customer_id", msg: "Customer not found" }]);
+        }
+      }
+
+      const sale = await Sale.create(data, { fields: FIELDS, transaction: t });
+
+      if (data.payment_method === "debt" && customer) {
+        await customer.increment("balance", { by: data.total_amount, transaction: t });
+      }
+
+      await t.commit();
+      res.status(201).json({ success: true, data: sale });
+    } catch (err) {
+      await t.rollback();
+      console.log(err);
+      res.status(500).json({ success: false, message: "Something went wrong" });
     }
-    const sale = await Sale.create(data, { fields: FIELDS });
-    res.status(201).json({ success: true, data: sale });
-  }catch(err){
-    console.log(err)
-  }
   },
 ];
-
 // ---------- PUT/PATCH /api/sales/:id ----------
 exports.updateSale = [
   idRule,

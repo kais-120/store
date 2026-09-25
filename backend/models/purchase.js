@@ -6,9 +6,9 @@ const Purchase = sequelize.define(
   "purchases",
   {
     id: {
-      type: DataTypes.STRING,
+      type: DataTypes.BIGINT,
       primaryKey: true,
-      allowNull: false,
+      autoIncrement:true
     },
 
     supplier_id: {
@@ -28,8 +28,8 @@ const Purchase = sequelize.define(
     status: {
       type: DataTypes.ENUM(
         "pending",
-        "partially_paid",
-        "paid"
+        "paid",
+        "debt"
       ),
       allowNull: false,
       defaultValue: "pending",

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Grid, GridItem, Box, InputGroup, InputLeftElement, Input, HStack, Button, Card, CardBody,
   useToast, useDisclosure, Text
@@ -10,24 +10,62 @@ import PaymentModal from '../components/pos/PaymentModal'
 import { useApp } from '../context/AppContext'
 import { categories } from '../data/products'
 import { formatMoney, lineTotal, startQty } from '../utils/format'
-import { getProducts } from '../services/api'
-import useFetchData from '../hook/useFetchData'
+import { createSale, getCustomers, getProducts } from '../services/api'
+import Receipt from '../components/pos/Receipt'
+import { pdf } from '@react-pdf/renderer'
+
+// API returns numeric fields as strings ("123.000") — normalize once here
+// so every product in state is guaranteed to hold real numbers.
+const normalizeProduct = (p) => ({
+  ...p,
+  price: Number(p.price),
+  purchase_price: Number(p.purchase_price),
+  stock: Number(p.stock),
+  min_stock: Number(p.min_stock),
+  step: Number(p.step),
+})
 
 export default function Sales() {
-  const { customers, completeSale } = useApp()
+  const { completeSale } = useApp()
   const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [isSaving,setIsSaving] = useState(false)
-  const { data: products, isLoading } = useFetchData(getProducts, isSaving)
 
 
-
+  const [products, setProducts] = useState([])
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [cart, setCart] = useState([])
   const [discount, setDiscount] = useState(0)
   const [heldCart, setHeldCart] = useState(null)
+  const [customers,setCustomers] = useState([])
 
+   useEffect(() => {
+          const dataShow = async () => {
+              try {  
+                const [responseProduct,responseCustomers] = await Promise.all(
+                  [
+                    getProducts(),
+                    getCustomers()
+                  ]
+                )
+                setProducts(responseProduct.data.data.map(normalizeProduct));
+                setCustomers(responseCustomers.data.data);
+
+              } catch (error) {
+                  console.log("err", error);
+              }
+          };
+  
+          dataShow();
+      }, []);
+
+    const handlePrintReceipt = async () => {
+  const blob = await pdf(
+    <Receipt cart={validCart} total={total} discount={discount} invoiceId={Date.now()} />
+  ).toBlob()
+  const url = URL.createObjectURL(blob)
+  window.open(url) // opens the PDF in a new tab, browser's print dialog can take it from there
+}
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchesCategory = category === 'all' || p.category === category
@@ -106,14 +144,20 @@ export default function Sales() {
     setHeldCart(null)
   }
 
-  const handleConfirmPayment = ({ method, customerId, paidAmount }) => {
-    const result = completeSale({ cart: validCart, customerId, method, paidAmount, discount })
+  const handleConfirmPayment = async ({ method, customerId, paidAmount }) => {
+    const payload = {
+    customer_id: customerId,
+    total_amount: paidAmount,
+    payment_method: method
+  }
+  const result = await createSale(payload)
+console.log(result)
     onClose()
     setCart([])
     setDiscount(0)
     toast({
       title: 'تمت عملية البيع بنجاح',
-      description: `${result.invoiceId} — ${formatMoney(result.total)}`,
+      description: `f-${result.data.data.id} — ${formatMoney(result.total_amount)}`,
       status: 'success',
       duration: 3000,
       isClosable: true,
@@ -148,7 +192,7 @@ export default function Sales() {
               <Button flex="1" size="sm" variant="outline" colorScheme="red" leftIcon={<XCircle size={15} />} onClick={cancelSale} isDisabled={cart.length === 0}>
                 إلغاء البيع
               </Button>
-              <Button flex="1" size="sm" variant="outline" leftIcon={<Printer size={15} />} onClick={() => window.print()} isDisabled={cart.length === 0}>
+              <Button flex="1" size="sm" variant="outline" leftIcon={<Printer size={15} />} onClick={handlePrintReceipt} isDisabled={cart.length === 0}>
                 طباعة
               </Button>
             </HStack>
