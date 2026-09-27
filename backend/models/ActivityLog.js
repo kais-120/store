@@ -45,7 +45,6 @@ const ActivityLog = sequelize.define(
   {
     tableName: "activity_logs",
     timestamps: true,
-    createdAt: "created_at",
     updatedAt: false,
   }
 );

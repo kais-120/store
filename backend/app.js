@@ -9,6 +9,12 @@ const SaleRoute = require("./router/SaleRoute")
 const SupplierRoute = require("./router/SupplierRoute")
 const AppSettingRoute = require("./router/AppSettingRoute")
 const DashboardRoute = require("./router/DashboardRoute")
+const AccountRoute = require("./router/AccountRoute")
+const ReportRoutes = require("./router/ReportRoutes")
+const ExpenseRoute = require("./router/ExpenseRoute")
+
+
+
 
 
 
@@ -20,6 +26,12 @@ router.use("/sale",SaleRoute)
 router.use("/supplier",SupplierRoute)
 router.use("/app-setting",AppSettingRoute)
 router.use("/dashboard",DashboardRoute)
+router.use("/account",AccountRoute)
+router.use("/report",ReportRoutes)
+router.use("/expense",ExpenseRoute)
+
+
+
 
 
 

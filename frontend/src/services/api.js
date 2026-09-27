@@ -32,8 +32,6 @@ export const updateSupplier = (id,data) => Axios.put(`/supplier/${id}`,data)
 export const deleteSupplier = (id) => Axios.delete(`/supplier/${id}`)
 export const paySupplierDebt = (data) => Axios.post(`/supplier/debt`, data)
 
-
-
 // Purchase
 export const getPurchases = () => Axios.get("/purchase")
 export const createPurchase = (data) => Axios.post("/purchase",data)
@@ -46,9 +44,29 @@ export const updateAppSetting = (id,data) => Axios.put(`/app-setting/${id}`,data
 
 // Dashboard
 export const getStats = () => Axios.get("/dashboard/stats")
-
-export const getActivity = (limit) =>
-  Axios.get("/dashboard/activity", { params: limit ? { limit } : {} })
-
+export const getActivity = (limit) => Axios.get("/dashboard/activity", { params: limit ? { limit } : {} })
 export const getSalesTrend = () => Axios.get(`/dashboard/sales-trend`)
-export const getCategoryBreakdown = (id) => Axios.get(`/dashboard/category-breakdown`)
+export const getCategoryBreakdown = () => Axios.get(`/dashboard/category-breakdown`)
+export const getLastSale = () => Axios.get(`/dashboard/last-sale`)
+export const getLowStockProducts = () => Axios.get(`/dashboard/low-stock-products`)
+
+// Account
+export const getRevenues = () => Axios.get("/account/revenues")
+
+// Report
+export const getReport = (type,period) => Axios.get(`/report/${type}?${period}`, {responseType: 'blob'})
+export const getReportStatus = (period,startDate,endDate) => Axios.get(`/report/dash/status?period=${period}&startDate=${startDate}&endDate=${endDate}`)
+export const getReportSalesTrend = (period,startDate,endDate) => Axios.get(`/report/dash/sales-trend?period=${period}&startDate=${startDate}&endDate=${endDate}`)
+export const getReportInfo = (type,period,startDate,endDate) => Axios.get(`/report/dash/report/${type}?period=${period}&startDate=${startDate}&endDate=${endDate}`)
+
+// Supplier
+export const getExpense = () => Axios.get("/expense")
+export const createExpense = (data) => Axios.post("/expense",data)
+// export const updateSupplier = (id,data) => Axios.put(`/supplier/${id}`,data)
+// export const deleteSupplier = (id) => Axios.delete(`/supplier/${id}`)
+// export const paySupplierDebt = (data) => Axios.post(`/supplier/debt`, data)
+
+
+
+
+

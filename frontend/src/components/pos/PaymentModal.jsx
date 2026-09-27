@@ -4,7 +4,6 @@ import {
   Button, FormControl, FormLabel, Input, Select, VStack, HStack, Text, Box
 } from '@chakra-ui/react'
 import { formatMoney } from '../../utils/format'
-import { createSale } from '../../services/api'
 
 const METHODS = [{key:'cash',label:"نقدا"}, {key:'debt',label:"بالدين"}]
 

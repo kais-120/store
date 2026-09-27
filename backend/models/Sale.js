@@ -1,4 +1,4 @@
-const { DataTypes } = require("sequelize");
+const { DataTypes, Sequelize } = require("sequelize");
 const sequelize = require("../config/db");
 const Customer = require("./Customer");
 
@@ -37,6 +37,7 @@ const Sale = sequelize.define(
       type: DataTypes.DATEONLY,
       defaultValue: DataTypes.NOW,
     },
+  
   },
   {
     tableName: "sales",

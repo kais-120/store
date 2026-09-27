@@ -7,6 +7,9 @@ const Customer = require("../models/Customer");
 const Supplier = require("../models/Supplier");
 const Product = require("../models/Product");
 const Sale = require("../models/Sale");
+const sequelize = require("../config/db");
+const SaleItem = require("../models/SaleItem");
+const { CustomerPayment } = require("../models");
 // const Purchase = require("../models/Purchase"); // not needed yet, kept for later
 
 function todayDateOnly() {
@@ -18,21 +21,48 @@ async function getStats(req, res) {
   try {
     const today = todayDateOnly();
 
-    const [todaySalesTotal, invoiceCount, customerDebt, supplierDebt] = await Promise.all([
+    const [
+      todaySalesTotal,
+      invoiceCount,
+      customerDebt,
+      supplierDebt,
+      cashSalesTotal,
+      customerPaymentsTotal, // NEW: cash collected from debt payments
+      todayProfitRow,
+    ] = await Promise.all([
       Sale.sum("total_amount", { where: { date: today } }),
-      Sale.count({ where: { date: today } }),
+      Sale.count(),
       Customer.sum("balance"),
       Supplier.sum("balance"),
+
+      Sale.sum("total_amount", { where: { payment_method: "cash" } }),
+      CustomerPayment.sum("amount"), // NEW
+
+      SaleItem.findOne({
+        attributes: [
+          [
+            sequelize.fn(
+              "SUM",
+              sequelize.literal("(sale_items.unit_price - products.purchase_price) * sale_items.quantity")
+            ),
+            "todayProfit",
+          ],
+        ],
+        include: [
+          { model: Sale, as: "sale", where: { date: today }, attributes: [] },
+          { model: Product, as: "products", attributes: [] },
+        ],
+        raw: true,
+      }),
     ]);
+
+    const cashboxBalance = (cashSalesTotal || 0) + (customerPaymentsTotal || 0);
 
     res.json({
       todaySales: todaySalesTotal || 0,
       invoiceCount: invoiceCount || 0,
-      // TODO: todayProfit needs per-sale line items (product qty × (price - purchase_price)).
-      // Returning 0 until a SaleItem model exists. See note below.
-      todayProfit: 0,
-      // TODO: cashboxBalance needs a Cashbox model / ledger. Returning null for now.
-      cashboxBalance: null,
+      todayProfit: Number(todayProfitRow?.todayProfit) || 0,
+      cashboxBalance,
       customerDebt: customerDebt || 0,
       supplierDebt: supplierDebt || 0,
     });
@@ -41,7 +71,6 @@ async function getStats(req, res) {
     res.status(500).json({ error: "فشل في تحميل إحصائيات اللوحة" });
   }
 }
-
 // GET /api/dashboard/activity
 async function getActivity(req, res) {
   try {
@@ -99,9 +128,37 @@ async function getSalesTrend(req, res) {
   }
 }
 
-// GET /api/dashboard/category-breakdown
-// FALLBACK: % of product catalog per category (no sale-item data yet).
-// Swap for revenue-based breakdown once a SaleItem model exists.
+async function getFacture(req, res) {
+  try {
+    const limit = Number(req.query.limit) || 5;
+
+    const facs = await Sale.findAll({
+      order: [["createdAt", "DESC"]],
+      limit,
+      include:[
+        {
+          model:Customer,
+          as:"customer",
+          attributes:["name"]
+        }
+      ]
+    });
+
+    const factures = facs.map((fac) => ({
+      id: `F-${fac.id}`,
+      customer: fac?.customer?.name || "حريف عابر",
+      payment_method:fac.payment_method,
+      amount:fac.total_amount,
+      time: fac.createdAt,
+    }));
+
+    res.json(factures);
+  } catch (err) {
+    console.error("getActivity error:", err);
+    res.status(500).json({ error: "فشل في تحميل النشاط الأخير" });
+  }
+}
+
 async function getCategoryBreakdown(req, res) {
   try {
     const rows = await Product.findAll({
@@ -125,9 +182,44 @@ async function getCategoryBreakdown(req, res) {
   }
 }
 
+const getLowStockProducts = async (req, res) => {
+  try {
+    const lowStockProducts = await Product.findAll({
+      where: {
+        stock: {
+          [Op.lte]: sequelize.col("min_stock"),
+        },
+      },
+      attributes: ["id", "name", "stock", "unit", "min_stock"],
+      order: [["stock", "ASC"]],
+    });
+
+    const result = lowStockProducts.map((product) => ({
+      name: product.name,
+      stock: product.stock,
+      unit: product.unit,
+      status: "كمية منخفضة",
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: result.length,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error fetching low stock products:", error);
+    return res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء جلب المنتجات ذات الكمية المنخفضة",
+    });
+  }
+};
+
 module.exports = {
   getStats,
   getActivity,
   getSalesTrend,
   getCategoryBreakdown,
+  getFacture,
+  getLowStockProducts
 };

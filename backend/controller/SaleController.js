@@ -3,6 +3,7 @@ const { body, param, query, matchedData, validationResult } = require("express-v
 const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const sequelize = require("../config/db");
+const { SaleItem, Product } = require("../models");
 
 const FIELDS = ["customer_id", "total_amount", "payment_method"];
 const PAYMENT_METHODS = ["cash", "debt"];
@@ -24,8 +25,17 @@ const saleRules = (isCreate) => {
   const req = (chain, msg) => (isCreate ? required(chain, msg) : chain.optional());
 
   return [
-    req(body("total_amount"), "total_amount is required")
-      .isFloat({ min: 0 }).withMessage("total_amount must be a number >= 0")
+    req(body("items"), "items is required")
+      .isArray({ min: 1 }).withMessage("items must be a non-empty array"),
+
+    body("items.*.product_id")
+      .exists().withMessage("product_id is required for each item")
+      .isInt({ min: 1 }).withMessage("product_id must be a positive integer")
+      .toInt(),
+
+    body("items.*.quantity")
+      .exists().withMessage("quantity is required for each item")
+      .isFloat({ gt: 0 }).withMessage("quantity must be a number > 0")
       .toFloat(),
 
     req(body("payment_method"), "payment_method is required")
@@ -37,6 +47,10 @@ const saleRules = (isCreate) => {
       .isInt({ min: 1 }).withMessage("customer_id must be a positive integer")
       .toInt(),
 
+    body("discount")
+      .optional()
+      .isFloat({ min: 0 }).withMessage("discount must be a number >= 0")
+      .toFloat(),
   ];
 };
 
@@ -92,7 +106,6 @@ exports.getSaleById = [
 
 // ---------- POST /api/sales ----------
 exports.createSale = [
-
   ...saleRules(true),
 
   body("customer_id").custom((value, { req }) => {
@@ -109,24 +122,92 @@ exports.createSale = [
     const t = await sequelize.transaction();
     try {
       const data = matchedData(req, { locations: ["body"], includeOptionals: false });
+      const { items, customer_id, payment_method, discount } = data;
+      const appliedDiscount = discount || 0;
+
+      if (!items || !items.length) {
+        await t.rollback();
+        return validationError(res, [{ path: "items", msg: "At least one item is required" }]);
+      }
 
       let customer = null;
-      if (data.customer_id) {
-        customer = await Customer.findByPk(data.customer_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (customer_id) {
+        customer = await Customer.findByPk(customer_id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!customer) {
           await t.rollback();
           return validationError(res, [{ path: "customer_id", msg: "Customer not found" }]);
         }
       }
 
-      const sale = await Sale.create(data, { fields: FIELDS, transaction: t });
+      // Lock products, validate stock, build sale items, compute subtotal
+      let subtotal = 0;
+      const saleItemsData = [];
 
-      if (data.payment_method === "debt" && customer) {
-        await customer.increment("balance", { by: data.total_amount, transaction: t });
+      for (const item of items) {
+        const product = await Product.findByPk(item.product_id, {
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        });
+
+        if (!product) {
+          await t.rollback();
+          return validationError(res, [{ path: "items", msg: `Product ${item.product_id} not found` }]);
+        }
+
+        if (Number(product.stock) < Number(item.quantity)) {
+          await t.rollback();
+          return validationError(res, [
+            { path: "items", msg: `Insufficient stock for ${product.name}` },
+          ]);
+        }
+
+        const lineTotal = Number(product.price) * Number(item.quantity);
+        subtotal += lineTotal;
+
+        saleItemsData.push({
+          product_id: product.id,
+          quantity: item.quantity,
+          unit_price: product.price,
+          purchase_price: product.purchase_price,
+        });
+
+        await product.decrement("stock", { by: item.quantity, transaction: t });
+      }
+
+      if (appliedDiscount > subtotal) {
+        await t.rollback();
+        return validationError(res, [
+          { path: "discount", msg: "discount cannot exceed the items subtotal" },
+        ]);
+      }
+
+      const totalAmount = subtotal - appliedDiscount;
+
+      const sale = await Sale.create(
+        {
+          customer_id: customer_id || null,
+          payment_method,
+          total_amount: totalAmount,
+        },
+        { transaction: t }
+      );
+
+      await SaleItem.bulkCreate(
+        saleItemsData.map((si) => ({ ...si, sale_id: sale.id })),
+        { transaction: t }
+      );
+
+      if (payment_method === "debt" && customer) {
+        await customer.increment("balance", { by: totalAmount, transaction: t });
       }
 
       await t.commit();
-      res.status(201).json({ success: true, data: sale });
+
+      const fullSale = await Sale.findByPk(sale.id, {
+        include: [{ model: SaleItem, as: "saleItem" }],
+      });
+
+      res.status(201).json({ success: true, data: fullSale });
     } catch (err) {
       await t.rollback();
       console.log(err);

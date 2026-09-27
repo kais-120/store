@@ -144,26 +144,47 @@ export default function Sales() {
     setHeldCart(null)
   }
 
-  const handleConfirmPayment = async ({ method, customerId, paidAmount }) => {
-    const payload = {
-    customer_id: customerId,
-    total_amount: paidAmount,
-    payment_method: method
+ const handleConfirmPayment = async ({ method, customerId, paidAmount }) => {
+  const payload = {
+    customer_id: customerId || null,
+    payment_method: method,
+    discount, // send discount so the backend can apply it to the computed total
+    items: validCart.map((i) => ({
+      product_id: i.id,
+      quantity: i.qty,
+    })),
   }
-  const result = await createSale(payload)
-console.log(result)
+
+  try {
+    const result = await createSale(payload)
+    const saved = result.data.data
+
     onClose()
     setCart([])
     setDiscount(0)
+
+    // refresh products so stock levels reflect the sale that just happened
+    const refreshed = await getProducts()
+    setProducts(refreshed.data.data.map(normalizeProduct))
+
     toast({
       title: 'تمت عملية البيع بنجاح',
-      description: `f-${result.data.data.id} — ${formatMoney(result.total_amount)}`,
+      description: `f-${saved.id} — ${formatMoney(saved.total_amount)}`,
       status: 'success',
       duration: 3000,
       isClosable: true,
     })
+  } catch (err) {
+    console.error(err)
+    toast({
+      title: 'فشل تسجيل عملية البيع',
+      description: err?.response?.data?.message || 'حدث خطأ، حاول مجددًا',
+      status: 'error',
+      duration: 4000,
+      isClosable: true,
+    })
   }
-
+}
   return (
     <Grid templateColumns={{ base: '1fr', xl: '3fr 2fr' }} gap={5} h={{ xl: 'calc(100vh - 130px)' }}>
       <GridItem overflow="hidden" display="flex" flexDirection="column">
