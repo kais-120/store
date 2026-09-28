@@ -1,10 +1,20 @@
 import React, { useEffect } from 'react'
 import {
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
-  Button, FormControl, FormLabel, Input, Textarea, FormErrorMessage, VStack
+  Button, FormControl, FormLabel, Input, Textarea, FormErrorMessage, VStack, Select
 } from '@chakra-ui/react'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
+
+export const EXPENSE_CATEGORIES = [
+  'فواتير',
+  'أجور',
+  'إيجار',
+  'شراء بضاعة',
+  'نقل',
+  'صيانة',
+  'أخرى',
+]
 
 const validationSchema = Yup.object({
   label: Yup.string()
@@ -12,7 +22,7 @@ const validationSchema = Yup.object({
     .required('عنوان المصروف مطلوب'),
   category: Yup.string()
     .trim()
-    .nullable(),
+    .required('الفئة مطلوبة'),
   amount: Yup.number()
     .typeError('المبلغ يجب أن يكون رقماً')
     .positive('المبلغ يجب أن يكون أكبر من صفر')
@@ -25,44 +35,42 @@ const validationSchema = Yup.object({
     .nullable(),
 })
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+// local date (toISOString would give the UTC date, which can be off by one day)
+const todayISO = () => {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+const buildInitialValues = (initialData) => ({
+  label: initialData?.label || '',
+  category: initialData?.category || '',
+  amount: initialData?.amount ?? '',
+  date: initialData?.date ? String(initialData.date).slice(0, 10) : todayISO(),
+  note: initialData?.note || '',
+})
 
 export default function ExpensesFormModal({ isOpen, onClose, onSave, initialData }) {
   const formik = useFormik({
-    initialValues: {
-      label: initialData?.label || '',
-      category: initialData?.category || '',
-      amount: initialData?.amount ?? '',
-      date: initialData?.date || todayISO(),
-      note: initialData?.note || '',
-    },
+    initialValues: buildInitialValues(initialData),
     validationSchema,
-    enableReinitialize: true,
-    onSubmit: (values, { resetForm }) => {
-      onSave({
+    onSubmit: async (values, { resetForm }) => {
+      // parent returns true on success, false on failure (modal stays open on failure)
+      const ok = await onSave({
         label: values.label.trim(),
-        category: values.category ? values.category.trim() : null,
+        category: values.category.trim(),
         amount: Number(values.amount),
         date: values.date,
         note: values.note ? values.note.trim() : null,
       })
-      resetForm()
-      onClose()
+      if (ok) resetForm()
     },
   })
 
-  // Reset form whenever the modal opens/closes or initialData changes
+  // Reset form whenever the modal opens or initialData changes
   useEffect(() => {
     if (isOpen) {
-      formik.resetForm({
-        values: {
-          label: initialData?.label || '',
-          category: initialData?.category || '',
-          amount: initialData?.amount ?? '',
-          date: initialData?.date || todayISO(),
-          note: initialData?.note || '',
-        },
-      })
+      formik.resetForm({ values: buildInitialValues(initialData) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, isOpen])
@@ -71,6 +79,12 @@ export default function ExpensesFormModal({ isOpen, onClose, onSave, initialData
     formik.resetForm()
     onClose()
   }
+
+  // keep a previously saved custom category selectable when editing
+  const categoryOptions =
+    initialData?.category && !EXPENSE_CATEGORIES.includes(initialData.category)
+      ? [...EXPENSE_CATEGORIES, initialData.category]
+      : EXPENSE_CATEGORIES
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} isCentered>
@@ -94,15 +108,19 @@ export default function ExpensesFormModal({ isOpen, onClose, onSave, initialData
               <FormErrorMessage>{formik.errors.label}</FormErrorMessage>
             </FormControl>
 
-            <FormControl isInvalid={formik.touched.category && !!formik.errors.category}>
+            <FormControl isRequired isInvalid={formik.touched.category && !!formik.errors.category}>
               <FormLabel fontSize="sm" fontWeight="700">الفئة</FormLabel>
-              <Input
+              <Select
                 name="category"
+                placeholder="اختر الفئة"
                 value={formik.values.category}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                placeholder="مثال: فواتير (اختياري)"
-              />
+              >
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </Select>
               <FormErrorMessage>{formik.errors.category}</FormErrorMessage>
             </FormControl>
 

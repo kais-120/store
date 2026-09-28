@@ -7,6 +7,7 @@ const Sale = require("./Sale");
 const Supplier = require("./Supplier");
 const SupplierTransaction = require("./SupplierTransaction");
 const SaleItem = require("./SaleItem");
+const Category = require("./Category");
 
 Supplier.hasMany(SupplierTransaction, {
   foreignKey: "supplier_id",
@@ -68,6 +69,16 @@ PurchaseItem.belongsTo(Product, {
   as: "product",
 });
 
+Category.hasMany(Product, {
+  foreignKey: "category_id",
+  as: "productCategory",
+});
+
+Product.belongsTo(Category, {
+  foreignKey: "category_id",
+  as: "category",
+});
+
 Sale.hasMany(SaleItem, {
   foreignKey: "sale_id",
   as: "saleItem",
@@ -90,4 +101,4 @@ SaleItem.belongsTo(Product, {
 
 
 
-module.exports = {SupplierTransaction,Supplier,Customer,CustomerPayment,Sale,Purchase,PurchaseItem,Product,SaleItem};
+module.exports = {SupplierTransaction,Supplier,Customer,CustomerPayment,Sale,Purchase,PurchaseItem,Product,SaleItem,Category};

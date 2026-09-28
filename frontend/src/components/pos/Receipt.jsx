@@ -31,7 +31,7 @@ export default function Receipt({ cart, total, discount, invoiceId }) {
     <Document>
       <Page size={[227, 500]} style={styles.page}>
         <View style={styles.center}>
-          <Text style={styles.title}>مغازة البركة</Text>
+          <Text style={styles.title}> سوبرات محمد علي</Text>
           <Text>فاتورة #{invoiceId}</Text>
           <Text>{formatDate(new Date())}</Text>
         </View>

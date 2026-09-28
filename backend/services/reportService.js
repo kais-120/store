@@ -16,13 +16,14 @@ const {
   Supplier,
   SupplierTransaction,
 } = require('../models');
+const Category = require('../models/Category');
 const Expense = require('../models/Expense');
 const AppSetting = require('../models/AppSetting');
 
 async function getShopSettings() {
   const settings = await AppSetting.findOne();
   return {
-    shopName: settings?.shop_name || 'مغازة البركة',
+    shopName: settings?.shop_name || 'سوبرات محمد علي',
     currency: settings?.currency || 'د.ت',
   };
 }
@@ -61,7 +62,12 @@ async function getProfitReport({ start, end }) {
         attributes: ['id', 'date', 'payment_method'],
         required: true,
       },
-      { model: Product, as: 'products', attributes: ['id', 'name', 'category'] },
+      {
+        model: Product,
+        as: 'products',
+        attributes: ['id', 'name', 'category_id'],
+        include: [{ model: Category, as: 'category', attributes: ['id', 'name'] }],
+      },
     ],
     order: [[{ model: Sale, as: 'sale' }, 'date', 'ASC']],
   });
@@ -84,7 +90,7 @@ async function getProfitReport({ start, end }) {
     if (!byProduct.has(key)) {
       byProduct.set(key, {
         name: item.products?.name || 'منتج محذوف',
-        category: item.products?.category || '-',
+        category: item.products?.category?.name || '-',
         quantity: 0,
         revenue: 0,
         cost: 0,
@@ -147,11 +153,17 @@ async function getExpensesReport({ start, end }) {
 // ---------- تقرير المخزون ----------
 // Snapshot of current stock — not date-filtered, since stock is a live value.
 async function getInventoryReport() {
-  const products = await Product.findAll({ order: [['category', 'ASC'], ['name', 'ASC']] });
+  const products = await Product.findAll({
+    include: [{ model: Category, as: 'category', attributes: ['id', 'name'] }],
+    order: [
+      [{ model: Category, as: 'category' }, 'name', 'ASC'],
+      ['name', 'ASC'],
+    ],
+  });
 
   const rows = products.map((p) => ({
     name: p.name,
-    category: p.category,
+    category: p.category?.name || '-',
     unit: p.unit,
     stock: num(p.stock),
     minStock: num(p.min_stock),

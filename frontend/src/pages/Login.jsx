@@ -55,7 +55,7 @@ export default function Login() {
           <Flex w="60px" h="60px" borderRadius="xl" bg="gold.500" align="center" justify="center" mb={2}>
             <Icon as={Store} boxSize={7} color="white" />
           </Flex>
-          <Heading size="lg" fontWeight="800">مغازة البركة</Heading>
+          <Heading size="lg" fontWeight="800">سوبرات محمد علي</Heading>
           <Text color="ink.muted" fontSize="sm">نظام إدارة المحل</Text>
         </VStack>
 

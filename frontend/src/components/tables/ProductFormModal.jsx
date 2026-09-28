@@ -1,18 +1,18 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   Button, FormControl, FormLabel, FormErrorMessage, Input, Select, SimpleGrid
 } from '@chakra-ui/react'
 import { Formik } from 'formik'
 import * as Yup from 'yup'
-import { categories } from '../../data/products'
 import { isWeighedUnit, defaultStep, priceBasis } from '../../utils/format'
+import { getCategories } from '../../services/api'
 
 const UNITS = ['قطعة', 'كغ', 'غ', 'لتر']
 
 const emptyForm = {
   name: '',
-  category: 'food',
+  category_id: '',
   price: '',
   purchase_price: '',
   unit: 'قطعة',
@@ -29,7 +29,8 @@ const numberField = (requiredMsg) =>
 
 const validationSchema = Yup.object({
   name: Yup.string().trim().required('اسم المنتج مطلوب'),
-  category: Yup.string().required('التصنيف مطلوب'),
+  // '' or null both fail as a type error, so show the same "required" message
+  category_id: Yup.number().typeError('التصنيف مطلوب').required('التصنيف مطلوب'),
   unit: Yup.string().oneOf(UNITS, 'وحدة غير صالحة').required('الوحدة مطلوبة'),
   purchase_price: numberField('سعر الشراء مطلوب'),
   price: numberField('سعر البيع مطلوب'),
@@ -41,10 +42,26 @@ const validationSchema = Yup.object({
 })
 
 export default function ProductFormModal({ isOpen, onClose, onSave, initialData }) {
+  const [categories, setCategories] = useState([])
+
+  useEffect(() => {
+    const dataShow = async () => {
+      try {
+        const responseCategories = await getCategories()
+        setCategories(responseCategories.data.data)
+      } catch (error) {
+        console.log('err', error)
+      }
+    }
+
+    dataShow()
+  }, [])
+
   const initialValues = useMemo(() => {
     if (!initialData) return emptyForm
     return {
       ...initialData,
+      category_id: initialData.category_id ?? '',
       price: String(initialData.price),
       purchase_price: String(initialData.purchase_price),
       stock: String(initialData.stock),
@@ -102,14 +119,14 @@ export default function ProductFormModal({ isOpen, onClose, onSave, initialData 
                       <FormErrorMessage>{errors.name}</FormErrorMessage>
                     </FormControl>
 
-                    <FormControl isRequired isInvalid={invalid('category')}>
+                    <FormControl isRequired isInvalid={invalid('category_id')}>
                       <FormLabel fontSize="sm" fontWeight="700">التصنيف</FormLabel>
-                      <Select {...field('category')}>
-                        {categories.filter((c) => c.id !== 'all').map((c) => (
-                          <option key={c.id} value={c.id}>{c.label}</option>
+                      <Select {...field('category_id')} placeholder="اختر التصنيف">
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </Select>
-                      <FormErrorMessage>{errors.category}</FormErrorMessage>
+                      <FormErrorMessage>{errors.category_id}</FormErrorMessage>
                     </FormControl>
 
                     <FormControl isRequired isInvalid={invalid('unit')}>

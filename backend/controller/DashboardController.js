@@ -1,5 +1,5 @@
 // controllers/dashboardController.js
-const { Op, fn, col } = require("sequelize");
+const { Op, fn, col, literal } = require("sequelize");
 const { timeAgo } = require("../utils/timeAgo");
 
 const ActivityLog = require("../models/ActivityLog");
@@ -10,6 +10,7 @@ const Sale = require("../models/Sale");
 const sequelize = require("../config/db");
 const SaleItem = require("../models/SaleItem");
 const { CustomerPayment } = require("../models");
+const Category = require("../models/Category");
 // const Purchase = require("../models/Purchase"); // not needed yet, kept for later
 
 function todayDateOnly() {
@@ -161,23 +162,45 @@ async function getFacture(req, res) {
 
 async function getCategoryBreakdown(req, res) {
   try {
-    const rows = await Product.findAll({
-      attributes: ["category", [fn("COUNT", col("id")), "count"]],
-      group: ["category"],
+    const counts = await Product.findAll({
+      attributes: ["category_id", [fn("COUNT", col("id")), "count"]],
+      group: ["category_id"],
       raw: true,
     });
 
-    const total = rows.reduce((sum, r) => sum + Number(r.count), 0);
+    if (counts.length === 0) return res.json([]);
+
+    const categories = await Category.findAll({
+      where: {
+        id: counts.map((c) => c.category_id),
+        status: "active",
+      },
+      attributes: ["id", "name"],
+      raw: true,
+    });
+
+    const nameById = new Map(categories.map((c) => [String(c.id), c.name]));
+
+    const rows = counts
+      .filter((c) => nameById.has(String(c.category_id)))
+      .map((c) => ({
+        name: nameById.get(String(c.category_id)),
+        count: Number(c.count),
+      }));
+
+    const total = rows.reduce((sum, r) => sum + r.count, 0);
     if (total === 0) return res.json([]);
 
     const breakdown = rows.map((r) => ({
-      name: r.category,
-      value: Math.round((Number(r.count) / total) * 100),
+      name: r.name,
+      value: Math.round((r.count / total) * 100),
     }));
 
     res.json(breakdown);
   } catch (err) {
-    console.error("getCategoryBreakdown error:", err);
+    console.error("getCategoryBreakdown error:", err.message);
+    console.error("SQL:", err.sql || err.original?.sql);
+    console.error(err.stack);
     res.status(500).json({ error: "فشل في تحميل توزيع الفئات" });
   }
 }
@@ -215,11 +238,52 @@ const getLowStockProducts = async (req, res) => {
   }
 };
 
+const getTopProducts = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 5;
+
+    const rows = await SaleItem.findAll({
+      attributes: [
+        "product_id",
+        [fn("SUM", col("quantity")), "total_quantity"],
+        [fn("SUM", literal("quantity * unit_price")), "total_revenue"],
+        [
+          fn("SUM", literal("quantity * (unit_price - purchase_price)")),
+          "total_profit",
+        ],
+      ],
+      group: ["product_id"],
+      order: [[literal("total_quantity"), "DESC"]],
+      limit,
+      raw: true,
+    });
+
+    const products = await Product.findAll({
+      where: { id: rows.map((r) => r.product_id) },
+      raw: true,
+    });
+    const productMap = new Map(products.map((p) => [String(p.id), p]));
+
+    const result = rows.map((r) => ({
+      product: productMap.get(String(r.product_id)) || null,
+      total_quantity: Number(r.total_quantity),
+      total_revenue: Number(r.total_revenue),
+      total_profit: Number(r.total_profit),
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch top products" });
+  }
+};
+
 module.exports = {
   getStats,
   getActivity,
   getSalesTrend,
   getCategoryBreakdown,
   getFacture,
-  getLowStockProducts
+  getLowStockProducts,
+  getTopProducts
 };

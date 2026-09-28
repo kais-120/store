@@ -3,6 +3,7 @@ const { body, param, query, matchedData, validationResult } = require("express-v
 const Supplier = require("../models/Supplier");
 const { SupplierTransaction } = require("../models");
 const sequelize = require("../config/db");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const FIELDS = ["name", "phone"];
 
@@ -106,6 +107,13 @@ exports.createSupplier = [
     const data = matchedData(req, { locations: ["body"], includeOptionals: false });
 
     const supplier = await Supplier.create(data, { fields: FIELDS });
+    await createActivityLog(
+  "create",
+  "supplier",
+  supplier.id,
+  supplier.name,
+  `تمت إضافة مزود جديد: ${supplier.name}`
+);
     res.status(201).json({ success: true, data: supplier });
   },
 ];
@@ -129,6 +137,13 @@ exports.updateSupplier = [
 
     const data = matchedData(req, { locations: ["body"], includeOptionals: false });
     await supplier.update(data, { fields: FIELDS });
+    await createActivityLog(
+  "update",
+  "supplier",
+  supplier.id,
+  supplier.name,
+  `تم تعديل بيانات المزود: ${supplier.name}`
+);
 
     res.json({ success: true, data: supplier });
   },
@@ -145,7 +160,7 @@ exports.deleteSupplier = [
     if (!supplier) return res.status(404).json({ success: false, message: "Supplier not found" });
 
     try {
-      await supplier.destroy();
+      await supplier.update({is_deleted:true});
     } catch (err) {
       // The supplier is still referenced by other records
       if (err.name === "SequelizeForeignKeyConstraintError") {
@@ -155,7 +170,15 @@ exports.deleteSupplier = [
         });
       }
       throw err;
+     
     }
+     await createActivityLog(
+  "delete",
+  "supplier",
+  supplier.id,
+  supplier.name,
+  `تم حذف المزود: ${supplier.name}`
+);
 
     res.json({ success: true, message: "Supplier deleted" });
   },
@@ -195,6 +218,13 @@ exports.paySupplierDebt = [
       await supplier.reload({ transaction: t });
 
       await t.commit();
+      await createActivityLog(
+  "payment",
+  "supplier",
+  supplier.id,
+  supplier.name,
+  `تم تسجيل دفعة بقيمة ${Number(amount).toFixed(3)} د.ت للمزود: ${supplier.name}`
+);
 
       res.status(201).json({
         success: true,

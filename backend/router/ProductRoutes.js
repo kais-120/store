@@ -1,9 +1,10 @@
 
 const router = require("express").Router();
 const { getProducts, getProductById, createProduct, updateProduct, deleteProduct } = require("../controller/ProductController");
+const { getProductsValidator } = require("../Validator/ProductValidator");
 
 
-router.get("/",getProducts);
+router.get("/",getProductsValidator,getProducts);
 router.get("/:id",getProductById);
 router.post("/", createProduct);
 router.put("/:id", updateProduct);

@@ -1,17 +1,19 @@
 import React from 'react'
 import { Box, VStack, HStack, Text, Flex, Icon, Divider } from '@chakra-ui/react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, ShoppingCart, Package, Truck, Users, Wallet, BarChart3, Settings, LogOut, Store } from 'lucide-react'
+import { Home, ShoppingCart, Package, Truck, Users, Wallet, BarChart3, Settings, LogOut, Store, Tags, DatabaseBackup } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 
 const navItems = [
   { to: '/dashboard', label: 'الرئيسية', icon: Home },
   { to: '/sales', label: 'المبيعات', icon: ShoppingCart },
+  { to: '/categories', label: 'التصنيفات', icon: Tags },
   { to: '/inventory', label: 'المخزون', icon: Package },
   { to: '/purchases', label: 'المشتريات', icon: Truck },
   { to: '/customers', label: 'الحرفاء', icon: Users },
   { to: '/accounts', label: 'الحسابات', icon: Wallet },
   { to: '/reports', label: 'التقارير', icon: BarChart3 },
+  { to: '/backup', label: 'النسخ الاحتياطي', icon: DatabaseBackup },
 ]
 
 export default function Sidebar({ onNavigate }) {
@@ -30,7 +32,7 @@ export default function Sidebar({ onNavigate }) {
           <Icon as={Store} boxSize={5} color="white" />
         </Flex>
         <Box>
-          <Text fontWeight="800" fontSize="lg" lineHeight="1.1">مغازة البركة</Text>
+          <Text fontWeight="800" fontSize="lg" lineHeight="1.1">سوبرات محمد علي</Text>
           <Text fontSize="xs" color="whiteAlpha.700">نظام إدارة المحل</Text>
         </Box>
       </HStack>

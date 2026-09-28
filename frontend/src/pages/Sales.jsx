@@ -1,17 +1,17 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState } from 'react'
 import {
-  Grid, GridItem, Box, InputGroup, InputLeftElement, Input, HStack, Button, Card, CardBody,
-  useToast, useDisclosure, Text
+  Grid, GridItem, Box, InputGroup, InputLeftElement, InputRightElement, Input, HStack, Button,
+  Card, CardBody, Spinner, useToast, useDisclosure
 } from '@chakra-ui/react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Search, Printer, XCircle, PauseCircle } from 'lucide-react'
 import ProductGrid from '../components/pos/ProductGrid'
 import CartPanel from '../components/pos/CartPanel'
 import PaymentModal from '../components/pos/PaymentModal'
-import { useApp } from '../context/AppContext'
-import { categories } from '../data/products'
-import { formatMoney, lineTotal, startQty } from '../utils/format'
-import { createSale, getCustomers, getProducts } from '../services/api'
 import Receipt from '../components/pos/Receipt'
+import useDebounce from '../hook/useDebounce'
+import { formatMoney, lineTotal, startQty } from '../utils/format'
+import { createSale, getCategories, getCustomers, getProducts } from '../services/api'
 import { pdf } from '@react-pdf/renderer'
 
 // API returns numeric fields as strings ("123.000") — normalize once here
@@ -26,58 +26,57 @@ const normalizeProduct = (p) => ({
 })
 
 export default function Sales() {
-  const { completeSale } = useApp()
   const toast = useToast()
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const queryClient = useQueryClient()
+  const { isOpen, onOpen, onClose } = useDisclosure()
 
-
-  const [products, setProducts] = useState([])
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [cart, setCart] = useState([])
   const [discount, setDiscount] = useState(0)
   const [heldCart, setHeldCart] = useState(null)
-  const [customers,setCustomers] = useState([])
 
-   useEffect(() => {
-          const dataShow = async () => {
-              try {  
-                const [responseProduct,responseCustomers] = await Promise.all(
-                  [
-                    getProducts(),
-                    getCustomers()
-                  ]
-                )
-                setProducts(responseProduct.data.data.map(normalizeProduct));
-                setCustomers(responseCustomers.data.data);
+  const debouncedQuery = useDebounce(query.trim(), 300)
 
-              } catch (error) {
-                  console.log("err", error);
-              }
-          };
-  
-          dataShow();
-      }, []);
+  // products: filtered on the server; refetches when search/category change
+  const { data: products = [], isFetching } = useQuery({
+    queryKey: ['products', { search: debouncedQuery, category }],
+    queryFn: async () => {
+      const res = await getProducts({
+        search: debouncedQuery || undefined,
+        category: category === 'all' ? undefined : category,
+        limit: 20,
+      })
+      return res.data.data.map(normalizeProduct)
+    },
+    placeholderData: keepPreviousData, // keep old results visible while typing, no flicker
+  })
 
-    const handlePrintReceipt = async () => {
-  const blob = await pdf(
-    <Receipt cart={validCart} total={total} discount={discount} invoiceId={Date.now()} />
-  ).toBlob()
-  const url = URL.createObjectURL(blob)
-  window.open(url) // opens the PDF in a new tab, browser's print dialog can take it from there
-}
-  const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      const matchesCategory = category === 'all' || p.category === category
-      const matchesQuery = p.name.toLowerCase().includes(query.trim().toLowerCase())
-      return matchesCategory && matchesQuery
-    })
-  }, [products, category, query])
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: async () => (await getCustomers()).data.data,
+    staleTime: 5 * 60 * 1000,
+  })
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => (await getCategories()).data.data,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const handlePrintReceipt = async () => {
+    const blob = await pdf(
+      <Receipt cart={validCart} total={total} discount={discount} invoiceId={Date.now()} />
+    ).toBlob()
+    const url = URL.createObjectURL(blob)
+    window.open(url) // opens the PDF in a new tab, browser's print dialog can take it from there
+  }
+
+  // Cart items already carry stock/step (spread from the product), so we use them
+  // instead of looking up `products` — which now only holds the current search results.
   // never let the cart quantity go above the stock, and keep 3 decimals (1 g precision)
-  const clampQty = (id, qty) => {
-    const product = products.find((p) => p.id === id)
-    const max = product ? product.stock : Infinity
+  const clampQty = (item, qty) => {
+    const max = item ? item.stock : Infinity
     return Math.min(Math.max(0, +Number(qty).toFixed(3)), max)
   }
 
@@ -87,7 +86,7 @@ export default function Sales() {
       if (existing) {
         return prev.map((i) => (
           i.id === product.id
-            ? { ...i, qty: clampQty(i.id, i.qty + (product.step || 1)), fixedTotal: undefined }
+            ? { ...i, qty: clampQty(i, i.qty + (i.step || 1)), fixedTotal: undefined }
             : i
         ))
       }
@@ -97,16 +96,14 @@ export default function Sales() {
   }
 
   const inc = (id) => {
-    const product = products.find((p) => p.id === id)
     setCart((prev) => prev.map((i) => (
-      i.id === id ? { ...i, qty: clampQty(id, i.qty + (product?.step || 1)), fixedTotal: undefined } : i
+      i.id === id ? { ...i, qty: clampQty(i, i.qty + (i.step || 1)), fixedTotal: undefined } : i
     )))
   }
 
   const dec = (id) => {
-    const product = products.find((p) => p.id === id)
     setCart((prev) => prev
-      .map((i) => (i.id === id ? { ...i, qty: +(i.qty - (product?.step || 1)).toFixed(3), fixedTotal: undefined } : i))
+      .map((i) => (i.id === id ? { ...i, qty: +(i.qty - (i.step || 1)).toFixed(3), fixedTotal: undefined } : i))
       .filter((i) => i.qty > 0))
   }
 
@@ -114,7 +111,7 @@ export default function Sales() {
   const setQty = (id, qty, fixedTotal) => {
     setCart((prev) => prev.map((i) => {
       if (i.id !== id) return i
-      const q = clampQty(id, qty)
+      const q = clampQty(i, qty)
       return { ...i, qty: q, fixedTotal: q === +Number(qty).toFixed(3) ? fixedTotal : undefined }
     }))
   }
@@ -144,53 +141,60 @@ export default function Sales() {
     setHeldCart(null)
   }
 
- const handleConfirmPayment = async ({ method, customerId, paidAmount }) => {
-  const payload = {
-    customer_id: customerId || null,
-    payment_method: method,
-    discount, // send discount so the backend can apply it to the computed total
-    items: validCart.map((i) => ({
-      product_id: i.id,
-      quantity: i.qty,
-    })),
+  const handleConfirmPayment = async ({ method, customerId }) => {
+    const payload = {
+      customer_id: customerId || null,
+      payment_method: method,
+      discount, // send discount so the backend can apply it to the computed total
+      items: validCart.map((i) => ({
+        product_id: i.id,
+        quantity: i.qty,
+      })),
+    }
+
+    try {
+      const result = await createSale(payload)
+      const saved = result.data.data
+
+      onClose()
+      setCart([])
+      setDiscount(0)
+
+      // refresh products so stock levels reflect the sale that just happened
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+
+      toast({
+        title: 'تمت عملية البيع بنجاح',
+        description: `f-${saved.id} — ${formatMoney(saved.total_amount)}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (err) {
+      console.error(err)
+      toast({
+        title: 'فشل تسجيل عملية البيع',
+        description: err?.response?.data?.message || 'حدث خطأ، حاول مجددًا',
+        status: 'error',
+        duration: 4000,
+        isClosable: true,
+      })
+    }
   }
 
-  try {
-    const result = await createSale(payload)
-    const saved = result.data.data
-
-    onClose()
-    setCart([])
-    setDiscount(0)
-
-    // refresh products so stock levels reflect the sale that just happened
-    const refreshed = await getProducts()
-    setProducts(refreshed.data.data.map(normalizeProduct))
-
-    toast({
-      title: 'تمت عملية البيع بنجاح',
-      description: `f-${saved.id} — ${formatMoney(saved.total_amount)}`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    })
-  } catch (err) {
-    console.error(err)
-    toast({
-      title: 'فشل تسجيل عملية البيع',
-      description: err?.response?.data?.message || 'حدث خطأ، حاول مجددًا',
-      status: 'error',
-      duration: 4000,
-      isClosable: true,
-    })
-  }
-}
   return (
     <Grid templateColumns={{ base: '1fr', xl: '3fr 2fr' }} gap={5} h={{ xl: 'calc(100vh - 130px)' }}>
       <GridItem overflow="hidden" display="flex" flexDirection="column">
-        <VStackFilters query={query} setQuery={setQuery} category={category} setCategory={setCategory} />
+        <VStackFilters
+          query={query}
+          setQuery={setQuery}
+          category={category}
+          setCategory={setCategory}
+          categories={categories}
+          isFetching={isFetching}
+        />
         <Box flex="1" overflowY="auto" mt={4} pe={1}>
-          <ProductGrid products={filteredProducts} onAdd={addToCart} />
+          <ProductGrid products={products} onAdd={addToCart} />
         </Box>
       </GridItem>
 
@@ -213,9 +217,9 @@ export default function Sales() {
               <Button flex="1" size="sm" variant="outline" colorScheme="red" leftIcon={<XCircle size={15} />} onClick={cancelSale} isDisabled={cart.length === 0}>
                 إلغاء البيع
               </Button>
-              <Button flex="1" size="sm" variant="outline" leftIcon={<Printer size={15} />} onClick={handlePrintReceipt} isDisabled={cart.length === 0}>
+              {/* <Button flex="1" size="sm" variant="outline" leftIcon={<Printer size={15} />} onClick={handlePrintReceipt} isDisabled={cart.length === 0}>
                 طباعة
-              </Button>
+              </Button> */}
             </HStack>
             {heldCart && (
               <Button mt={2} size="sm" variant="ghost" onClick={resumeHeld}>
@@ -231,21 +235,29 @@ export default function Sales() {
   )
 }
 
-function VStackFilters({ query, setQuery, category, setCategory }) {
+function VStackFilters({ query, setQuery, category, setCategory, categories, isFetching }) {
   return (
     <Box>
       <InputGroup mb={3}>
         <InputLeftElement pointerEvents="none"><Search size={16} color="#6B6660" /></InputLeftElement>
         <Input placeholder="ابحث عن منتج..." value={query} onChange={(e) => setQuery(e.target.value)} bg="white" />
+        <InputRightElement>{isFetching && <Spinner size="xs" />}</InputRightElement>
       </InputGroup>
       <HStack spacing={2} overflowX="auto" pb={1}>
+        <Button
+          size="sm" flexShrink={0}
+          variant={category === 'all' ? 'solid' : 'outline'}
+          onClick={() => setCategory('all')}
+        >
+          الكل
+        </Button>
         {categories.map((c) => (
           <Button
             key={c.id} size="sm" flexShrink={0}
             variant={category === c.id ? 'solid' : 'outline'}
             onClick={() => setCategory(c.id)}
           >
-            {c.label}
+            {c.name}
           </Button>
         ))}
       </HStack>

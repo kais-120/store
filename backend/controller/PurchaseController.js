@@ -6,6 +6,7 @@ const PurchaseItem = require("../models/PurchaseItem");
 const Product = require("../models/Product");
 const sequelize = require("../config/db");
 const { SupplierTransaction } = require("../models");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const FIELDS = ["id", "supplier_id", "total_amount", "status", "date"];
 const UPDATABLE = FIELDS.filter((f) => f !== "id");
@@ -172,6 +173,9 @@ exports.createPurchase = [
     const status = data.status || "pending";
 
     const transaction = await sequelize.transaction();
+    let purchase;
+    let createdItems;
+
     try {
       // Lock the supplier row for the duration of the transaction
       const supplier = await Supplier.findByPk(data.supplier_id, {
@@ -183,7 +187,7 @@ exports.createPurchase = [
         return validationError(res, [{ path: "supplier_id", msg: "Supplier not found" }]);
       }
 
-      const purchase = await Purchase.create(
+      purchase = await Purchase.create(
         {
           supplier_id: data.supplier_id,
           date: data.date,
@@ -193,7 +197,7 @@ exports.createPurchase = [
         { transaction }
       );
 
-      const createdItems = await PurchaseItem.bulkCreate(
+      createdItems = await PurchaseItem.bulkCreate(
         itemsWithTotals.map((item) => ({
           purchase_id: purchase.id,
           product_id: item.product_id,
@@ -203,6 +207,15 @@ exports.createPurchase = [
         })),
         { transaction }
       );
+
+      // Add purchased quantities to product stock (atomic increment)
+      for (const item of itemsWithTotals) {
+        await Product.increment("stock", {
+          by: item.quantity,
+          where: { id: item.product_id },
+          transaction,
+        });
+      }
 
       // Debt purchases increase what we owe the supplier
       if (status === "debt") {
@@ -219,22 +232,34 @@ exports.createPurchase = [
       }
 
       await transaction.commit();
-
-      return res.status(201).json({
-        success: true,
-        data: {
-          ...purchase.toJSON(),
-          items: createdItems,
-        },
-      });
     } catch (error) {
       await transaction.rollback();
       console.error("createPurchase error:", error);
       return res.status(500).json({ success: false, message: "Failed to create purchase" });
     }
+
+    // Activity log after commit; a failure here must not affect the purchase
+    try {
+      await createActivityLog(
+        "purchase",
+        "purchase",
+        purchase.id,
+        `Purchase #${purchase.id}`,
+        `تمت إضافة عملية شراء بقيمة ${Number(totalAmount).toFixed(3)} د.ت`
+      );
+    } catch (logError) {
+      console.error("createActivityLog error:", logError);
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        ...purchase.toJSON(),
+        items: createdItems,
+      },
+    });
   },
 ];
-
 // ---------- PUT/PATCH /api/purchases/:id ----------
 exports.updatePurchase = [
   idRule,
@@ -260,6 +285,13 @@ exports.updatePurchase = [
     }
 
     await purchase.update(data, { fields: UPDATABLE });
+    await createActivityLog(
+  "update",
+  "purchase",
+  purchase.id,
+  `Purchase #${purchase.id}`,
+  `تم تعديل عملية الشراء #${purchase.id}`
+);
     res.json({ success: true, data: purchase });
   },
 ];
@@ -275,7 +307,7 @@ exports.deletePurchase = [
     if (!purchase) return res.status(404).json({ success: false, message: "Purchase not found" });
 
     try {
-      await purchase.destroy();
+      await purchase.update({is_deleted:true});
     } catch (err) {
       // The purchase is still referenced by other records (payments, items...)
       if (err.name === "SequelizeForeignKeyConstraintError") {
@@ -286,6 +318,13 @@ exports.deletePurchase = [
       }
       throw err;
     }
+    await createActivityLog(
+  "delete",
+  "purchase",
+  purchase.id,
+  `Purchase #${purchase.id}`,
+  `تم حذف عملية الشراء #${purchase.id}`
+);
 
     res.json({ success: true, message: "Purchase deleted" });
   },

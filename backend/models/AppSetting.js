@@ -13,7 +13,7 @@ const AppSetting = sequelize.define(
     shop_name: {
       type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: "مغازة البركة",
+      defaultValue: "سوبرات محمد علي",
     },
 
     currency: {

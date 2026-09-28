@@ -3,6 +3,7 @@ const { body, param, query, matchedData, validationResult } = require("express-v
 const Customer = require("../models/Customer");
 const sequelize = require("../config/db");
 const { Sale, CustomerPayment } = require("../models");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const FIELDS = ["name", "phone"];
 
@@ -45,39 +46,57 @@ exports.getCustomers = [
     const errors = validationResult(req);
     if (!errors.isEmpty()) return validationError(res, errors.array());
 
-    const { page = 1, limit = 20, search } = matchedData(req, { locations: ["query"] });
+    try {
+      const { page = 1, limit = 20, search } = matchedData(req, { locations: ["query"] });
 
-    const where = {};
-    if (search) {
-      where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { phone: { [Op.like]: `%${search}%` } },
-      ];
+      const where = { is_deleted: false };
+      if (search) {
+        where[Op.or] = [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { phone: { [Op.iLike]: `%${search}%` } },
+        ];
+      }
+
+      const total = await Customer.count({ where });
+
+      const rows = await Customer.findAll({
+        where,
+        attributes: {
+          include: [
+            [
+              Sequelize.literal(`(
+                SELECT COALESCE(SUM(s.total_amount), 0)
+                FROM sales s
+                WHERE s.customer_id = "customers"."id"
+                  AND s.is_deleted = false
+              )`),
+              "totalPurchases",
+            ],
+            [
+              Sequelize.literal(`(
+                SELECT MAX(s.date)
+                FROM sales s
+                WHERE s.customer_id = "customers"."id"
+                  AND s.is_deleted = false
+              )`),
+              "lastSale",
+            ],
+          ],
+        },
+        limit,
+        offset: (page - 1) * limit,
+        order: [["createdAt", "DESC"]],
+      });
+
+      res.json({
+        success: true,
+        data: rows,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      });
+    } catch (err) {
+      console.error(err.parent?.message || err.message, err.sql);
+      res.status(500).json({ success: false, message: "Failed to fetch customers" });
     }
-
-    const { rows, count } = await Customer.findAndCountAll({
-  where,
-  attributes: {
-    include: [
-      [
-        Sequelize.literal(`(
-          SELECT COALESCE(SUM(total_amount), 0) FROM sales
-          WHERE sales.customer_id = customers.id
-        )`),
-        "totalPurchases",
-      ],
-    ],
-  },
-  limit,
-  offset: (page - 1) * limit,
-  order: [["createdAt", "DESC"]],
-});
-
-    res.json({
-      success: true,
-      data: rows,
-      pagination: { page, limit, total: count, pages: Math.ceil(count / limit) },
-    });
   },
 ];
 
@@ -106,6 +125,13 @@ exports.createCustomer = [
     const data = matchedData(req, { locations: ["body"], includeOptionals: false });
 
     const customer = await Customer.create(data, { fields: FIELDS });
+    await createActivityLog(
+  "create",
+  "customer",
+  customer.id,
+  customer.name,
+  `تمت إضافة حريف جديد: ${customer.name}`
+);
     res.status(201).json({ success: true, data: customer });
   },
 ];
@@ -129,6 +155,13 @@ exports.updateCustomer = [
 
     const data = matchedData(req, { locations: ["body"], includeOptionals: false });
     await customer.update(data, { fields: FIELDS });
+    await createActivityLog(
+  "update",
+  "customer",
+  customer.id,
+  customer.name,
+  `تم تعديل بيانات الحريف: ${customer.name}`
+);
 
     res.json({ success: true, data: customer });
   },
@@ -145,7 +178,7 @@ exports.deleteCustomer = [
     if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
 
     try {
-      await customer.destroy();
+      await customer.update({is_deleted:true});
     } catch (err) {
       // The customer still has sales pointing at it
       if (err.name === "SequelizeForeignKeyConstraintError") {
@@ -156,6 +189,13 @@ exports.deleteCustomer = [
       }
       throw err;
     }
+    await createActivityLog(
+  "delete",
+  "customer",
+  customer.id,
+  customer.name,
+  `تم حذف الحريف: ${customer.name}`
+);
 
     res.json({ success: true, message: "Customer deleted" });
   },
@@ -192,6 +232,13 @@ exports.payDebt = [
       await customer.reload({ transaction: t });
 
       await t.commit();
+      await createActivityLog(
+  "payment",
+  "customer",
+  customer.id,
+  customer.name,
+  `تم تسجيل دفعة بقيمة ${Number(amount).toFixed(3)} د.ت للحريف: ${customer.name}`
+);
 
       res.status(201).json({
         success: true,

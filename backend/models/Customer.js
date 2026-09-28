@@ -24,7 +24,14 @@ const Customer = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    is_deleted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue:false
+
+    }
   },
+  
   
   {
     tableName: "customers",

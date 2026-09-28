@@ -19,7 +19,7 @@ export default function CustomerDetailsDrawer({ isOpen, onClose, customer, onReg
       .typeError('أدخل رقمًا صحيحًا')
       .required('المبلغ مطلوب')
       .moreThan(0, 'يجب أن يكون المبلغ أكبر من صفر')
-      .max(customer.debt, `المبلغ يتجاوز الدين المتبقي (${formatMoney(customer.debt)})`),
+      .max(customer.balance, `المبلغ يتجاوز الدين المتبقي (${formatMoney(customer.balance)})`),
   })
 
   const handlePay = async (values, { setSubmitting, resetForm }) => {
@@ -69,7 +69,7 @@ export default function CustomerDetailsDrawer({ isOpen, onClose, customer, onReg
               <Box bg="sand.100" borderRadius="lg" p={3}>
                 <Stat>
                   <StatLabel fontSize="xs">الدين الحالي</StatLabel>
-                  <StatNumber fontSize="lg" color={customer.debt > 0 ? 'brick.500' : 'olive.500'}>{formatMoney(customer.debt)}</StatNumber>
+                  <StatNumber fontSize="lg" color={customer.balance > 0 ? 'brick.500' : 'olive.500'}>{formatMoney(customer.balance)}</StatNumber>
                 </Stat>
               </Box>
             </SimpleGrid>
@@ -103,13 +103,13 @@ export default function CustomerDetailsDrawer({ isOpen, onClose, customer, onReg
                           min={0}
                           step="0.001"
                           placeholder="0.000"
-                          isDisabled={isSubmitting || customer.debt <= 0}
+                          isDisabled={isSubmitting || customer.balance <= 0}
                         />
                         <FormErrorMessage>{errors.amount}</FormErrorMessage>
                       </FormControl>
                       <Button
                         type="submit"
-                        isDisabled={customer.debt <= 0}
+                        isDisabled={customer.balance <= 0}
                         isLoading={isSubmitting}
                       >
                         تسجيل

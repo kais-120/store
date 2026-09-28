@@ -223,27 +223,27 @@ exports.getReport = async (req, res) => {
   try {
     const { type } = req.params;
     const { period = "month", startDate, endDate } = req.query;
- 
+
     const handler = REPORT_HANDLERS[type];
     if (!handler) {
       return res.status(400).json({
         message: `Unknown report type "${type}". Valid types: ${Object.keys(REPORT_HANDLERS).join(", ")}`,
       });
     }
- 
+
     const shopSettings = await reportService.getShopSettings();
- 
+
     let data;
     let range = null;
- 
+
     if (PERIOD_LESS_REPORTS.has(type)) {
       data = await handler();
     } else {
-      const { start, end } = getDateRange({period, startDate, endDate});
+      const { start, end } = getDateRange({ period, startDate, endDate });
       range = { start, end };
       data = await handler({ start, end });
     }
- 
+
     return res.status(200).json({
       type,
       period,
@@ -252,6 +252,10 @@ exports.getReport = async (req, res) => {
       ...data,
     });
   } catch (error) {
+    console.error(`getReport(${req.params.type}) error:`, error.message);
+    console.error("SQL:", error.sql || error.original?.sql);
+    console.error(error.stack);
+
     return res.status(error.status || 500).json({
       message: error.message || "Failed to generate report",
     });

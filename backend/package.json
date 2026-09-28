@@ -8,7 +8,11 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "server": "nodemon server.js"
+    "server": "nodemon server.js",
+    "app": "node ./seeders/seedAppSettings",
+    "admin": "node ./seeders/admin"
+
+
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -17,6 +21,8 @@
     "express": "^5.2.1",
     "express-jwt": "^8.5.1",
     "express-validator": "^7.3.2",
+    "googleapis": "^182.0.0",
+    "node-cron": "^4.6.0",
     "nodemon": "^3.1.14",
     "pg": "^8.23.0",
     "puppeteer": "^25.12.0",

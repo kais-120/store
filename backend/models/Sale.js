@@ -37,6 +37,12 @@ const Sale = sequelize.define(
       type: DataTypes.DATEONLY,
       defaultValue: DataTypes.NOW,
     },
+    is_deleted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue:false
+
+    }
   
   },
   {

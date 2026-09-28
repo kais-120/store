@@ -9,6 +9,8 @@ router.get("/sales-trend", dashboardController.getSalesTrend);
 router.get("/category-breakdown", dashboardController.getCategoryBreakdown);
 router.get("/last-sale", dashboardController.getFacture);
 router.get("/low-stock-products", dashboardController.getLowStockProducts);
+router.get("/top", dashboardController.getTopProducts);
+
 
 
 

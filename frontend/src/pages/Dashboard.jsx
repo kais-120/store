@@ -4,36 +4,37 @@ import {
   Badge, VStack, HStack, Text, Box, Spinner, Center
 } from '@chakra-ui/react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { DollarSign, Receipt, TrendingUp, Wallet, Users, Truck, Clock } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Wallet, Users, Truck, Clock, Award } from 'lucide-react'
 import StatCard from '../components/common/StatCard'
 import PageHeader from '../components/common/PageHeader'
 import { useApp } from '../context/AppContext'
 import { formatMoney } from '../utils/format'
 import { stockStatus } from '../data/products'
-import { getActivity, getCategoryBreakdown, getLastSale, getLowStockProducts, getSalesTrend, getStats } from '../services/api'
+import { getActivity, getCategoryBreakdown, getLastSale, getLowStockProducts, getSalesTrend, getStats, getTopProducts } from '../services/api'
 // `salesTrend` no longer imported statically — it now comes from context (live API data)
 
 export default function Dashboard() {
-  const { stats, sales, products, activity, salesTrend, loading } = useApp()
+  const [loading,setLoading] = useState(true)
   const [data,setData] = useState({
     stats:{},
     activity:[],
     salesTrend:[],
     lastSale:[],
-    lowStockProducts:[]
+    lowStockProducts:[],
+    top:[]
 
   })
 
   useEffect(()=>{
       const dataFetch = async () =>{
         try{
-          const [responseGetStats,responseGetActivity,responseGetSalesTrend,responseGetCategoryBreakdown,responseLastSale,responseLowStockProducts] = await Promise.all([
+          const [responseGetStats,responseGetActivity,responseGetSalesTrend,responseLastSale,responseLowStockProducts,responseTop] = await Promise.all([
             getStats(),
             getActivity(),
             getSalesTrend(),
-            getCategoryBreakdown(),
             getLastSale(),
             getLowStockProducts(),
+            getTopProducts()
 
           ])
       setData({
@@ -41,10 +42,13 @@ export default function Dashboard() {
         activity: responseGetActivity.data,
         salesTrend: responseGetSalesTrend.data,
         lastSale:responseLastSale.data,
-        lowStockProducts:responseLowStockProducts.data
+        lowStockProducts:responseLowStockProducts.data.data,
+        top: responseTop.data
       });
         }catch{
           console.error("error")
+        }finally{
+          setLoading(false)
         }
       }
       dataFetch()
@@ -103,7 +107,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardBody>
             <VStack align="stretch" spacing={4}>
-              {activity.map((a) => (
+              {data.activity.map((a) => (
                 <HStack key={a.id} align="flex-start" spacing={3}>
                   <Box mt={1} w="8px" h="8px" borderRadius="full" bg="gold.500" flexShrink={0} />
                   <Box>
@@ -120,7 +124,7 @@ export default function Dashboard() {
         </Card>
       </Grid>
 
-      <Grid templateColumns={{ base: '1fr', xl: '3fr 2fr' }} gap={5}>
+      <Grid templateColumns={{ base: '1fr', xl: '3fr 2fr' }} gap={5} mb={5}>
         <Card>
           <CardHeader pb={0}><Heading size="sm">المبيعات الأخيرة</Heading></CardHeader>
           <CardBody overflowX="auto">
@@ -175,7 +179,7 @@ export default function Dashboard() {
           <Td>{p.unit}</Td>
           <Td>
             <Badge bg="yellow.500" color="white">
-              {status}
+              {p.status}
             </Badge>
           </Td>
         </Tr>
@@ -192,6 +196,47 @@ export default function Dashboard() {
           </CardBody>
         </Card>
       </Grid>
+
+      <Card>
+        <CardHeader pb={0}>
+          <HStack>
+            <Award size={18} color="#C9A227" />
+            <Heading size="sm">أكثر 5 منتجات مبيعا</Heading>
+          </HStack>
+        </CardHeader>
+        <CardBody overflowX="auto">
+          <Table size="sm">
+            <Thead>
+              <Tr>
+                <Th>#</Th>
+                <Th>المنتج</Th>
+                <Th>الكمية المباعة</Th>
+                <Th>رقم المعاملات</Th>
+                <Th>الربح</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {data?.top?.length > 0 ? (
+                data.top.map((p, i) => (
+                  <Tr key={p.product?.id ?? i}>
+                    <Td fontWeight="700">{i + 1}</Td>
+                    <Td>{p.product?.name ?? '—'}</Td>
+                    <Td>{p.total_quantity}</Td>
+                    <Td>{formatMoney(p.total_revenue)}</Td>
+                    <Td color="olive.600" fontWeight="600">{formatMoney(p.total_profit)}</Td>
+                  </Tr>
+                ))
+              ) : (
+                <Tr>
+                  <Td colSpan={5} textAlign="center" py={6} color="gray.500">
+                    لا توجد بيانات مبيعات بعد
+                  </Td>
+                </Tr>
+              )}
+            </Tbody>
+          </Table>
+        </CardBody>
+      </Card>
     </Box>
   )
 }

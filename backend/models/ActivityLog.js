@@ -17,7 +17,8 @@ const ActivityLog = sequelize.define(
         "delete",
         "sale",
         "payment",
-        "purchase"
+        "purchase",
+        "login"
       ),
       allowNull: false,
     },

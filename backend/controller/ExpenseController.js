@@ -1,52 +1,42 @@
 const { Op } = require("sequelize");
 const Expense = require("../models/Expense");
-const { body, validationResult, param } = require("express-validator");
+const { body, validationResult, param, query, matchedData } = require("express-validator");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 exports.getExpenses = async (req, res) => {
   try {
-    const { startDate, endDate, category } = req.query;
+    const page = Math.max(parseInt(req.query.page) || 1, 1)
+    const limit = Math.min(parseInt(req.query.limit) || 10, 100)
+    const { search, category, dateFrom, dateTo } = req.query
 
-    const where = {};
-
-    if (startDate && endDate) {
-      where.date = {
-        [Op.between]: [startDate, endDate],
-      };
-    } else if (startDate) {
-      where.date = {
-        [Op.gte]: startDate,
-      };
-    } else if (endDate) {
-      where.date = {
-        [Op.lte]: endDate,
-      };
+    const where = {}
+    if (search) where.label = { [Op.like]: `%${search}%` }
+    if (category) where.category = category
+    if (dateFrom || dateTo) {
+      where.date = {}
+      if (dateFrom) where.date[Op.gte] = dateFrom
+      if (dateTo) where.date[Op.lte] = dateTo
     }
 
-    if (category) {
-      where.category = category;
-    }
-
-    const expenses = await Expense.findAll({
+    const { count, rows } = await Expense.findAndCountAll({
       where,
-      order: [
-        ["date", "DESC"],
-        ["id", "DESC"],
-      ],
-    });
+      order: [['date', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+    })
 
-    res.status(200).json({
-      success: true,
-      data: expenses,
-    });
+    const filteredTotal = (await Expense.sum('amount', { where })) || 0
+    const total = (await Expense.sum('amount')) || 0
+
+    res.json({
+      data: rows,
+      pagination: { total: count, page, limit, pages: Math.max(Math.ceil(count / limit), 1) },
+      summary: { total, filteredTotal },
+    })
   } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      success: false,
-      message: "حدث خطأ أثناء جلب المصاريف",
-    });
+    res.status(500).json({ message: error.message })
   }
-};
+}
 
 exports.getExpenseById = async (req, res) => {
   try {
@@ -130,6 +120,13 @@ async (req, res) => {
       date,
       note,
     });
+    await createActivityLog(
+  "create",
+  "expense",
+  expense.id,
+  expense.label,
+  `تمت إضافة مصروف جديد: ${expense.label} بقيمة ${Number(expense.amount).toFixed(3)} د.ت`
+);
 
     res.status(201).json({
       success: true,
@@ -215,6 +212,14 @@ async (req, res) => {
       note,
     });
 
+    await createActivityLog(
+  "update",
+  "expense",
+  expense.id,
+  expense.label,
+  `تم تعديل المصروف: ${expense.label}`
+);
+
     res.status(200).json({
       success: true,
       message: "تم تحديث المصروف بنجاح",
@@ -243,6 +248,14 @@ exports.deleteExpense = async (req, res) => {
     }
 
     await expense.destroy();
+    
+    await createActivityLog(
+  "delete",
+  "expense",
+  expense.id,
+  expense.label,
+  `تم حذف المصروف: ${expense.label}`
+);
 
     res.status(200).json({
       success: true,

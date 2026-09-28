@@ -1,16 +1,24 @@
 const { Op, col } = require("sequelize");
 const { matchedData, validationResult, body } = require("express-validator");
 const Product = require("../models/Product");
+const { createActivityLog } = require("../utils/createActivityLog");
 
-const FIELDS = ["name", "category", "price", "purchase_price", "unit", "stock", "min_stock", "step"];
+const FIELDS = ["name", "category_id", "price", "purchase_price", "unit", "stock", "min_stock", "step"];
+
+
 
 exports.getProducts = async (req, res) => {
   const { page = 1, limit = 20, search, category, lowStock } = matchedData(req, { locations: ["query"] });
 
+  // console.log("req.query:", req.query);
+  // console.log("matchedData:", data);
+
+
   const where = {};
   if (search) where.name = { [Op.like]: `%${search}%` };
-  if (category) where.category = category;
+  if (category) where.category_id = category;
   if (lowStock) where.stock = { [Op.lte]: col("min_stock") };
+  where.is_deleted = false;
 
   const { rows, count } = await Product.findAndCountAll({
     where,
@@ -42,12 +50,12 @@ exports.createProduct = [
       .trim().notEmpty().withMessage("name cannot be empty")
       .isLength({ max: 255 }).withMessage("name is too long"),
  
-      body("category")
+      body("category_id")
       .notEmpty()
       .withMessage("category is required")
-      .isString().withMessage("category must be a string")
-      .trim().notEmpty().withMessage("category cannot be empty")
-      .isLength({ max: 255 }),
+      .isNumeric().withMessage("category must be a number")
+      .trim().notEmpty().withMessage("category cannot be empty"),
+ 
  
     body("price")
       .notEmpty()
@@ -87,6 +95,13 @@ exports.createProduct = [
   const data = matchedData(req, { locations: ["body"], includeOptionals: false });
 
   const product = await Product.create(data, { fields: FIELDS });
+  await createActivityLog(
+  "create",
+  "product",
+  product.id,
+  product.name,
+  `تمت إضافة منتج جديد: ${product.name}`
+);
   res.status(201).json({ success: true, data: product });
 }
 ]
@@ -99,12 +114,11 @@ exports.updateProduct = [
       .trim().notEmpty().withMessage("name cannot be empty")
       .isLength({ max: 255 }).withMessage("name is too long"),
  
-      body("category")
+      body("category_id")
       .notEmpty()
       .withMessage("category is required")
-      .isString().withMessage("category must be a string")
-      .trim().notEmpty().withMessage("category cannot be empty")
-      .isLength({ max: 255 }),
+      .isNumeric().withMessage("category must be a number")
+      .trim().notEmpty().withMessage("category cannot be empty"),
  
     body("price")
       .notEmpty()
@@ -145,7 +159,13 @@ exports.updateProduct = [
 
   const data = matchedData(req, { locations: ["body"], includeOptionals: false });
   await product.update(data, { fields: FIELDS });
-
+await createActivityLog(
+  "update",
+  "product",
+  product.id,
+  product.name,
+  `تم تعديل المنتج: ${product.name}`
+);
   res.json({ success: true, data: product });
 }]
 
@@ -154,6 +174,13 @@ exports.deleteProduct = async (req, res) => {
   const product = await Product.findByPk(req.params.id);
   if (!product) return res.status(404).json({ success: false, message: "Product not found" });
 
-  await product.destroy();
+  await product.update({is_deleted:true});
+  await createActivityLog(
+  "delete",
+  "product",
+  product.id,
+  product.name,
+  `تم حذف المنتج: ${product.name}`
+);
   res.json({ success: true, message: "Product deleted" });
 };

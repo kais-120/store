@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
+const Category = require("./Category");
 
 const Product = sequelize.define(
   "products",
@@ -15,9 +16,13 @@ const Product = sequelize.define(
       allowNull: false,
     },
 
-    category: {
-      type: DataTypes.STRING,
+    category_id: {
+      type: DataTypes.BIGINT,
       allowNull: false,
+      references:{
+        key:"id",
+        model:Category
+      }
     },
 
     price: {
@@ -54,6 +59,11 @@ const Product = sequelize.define(
       allowNull: false,
       defaultValue: 1,
     },
+    is_deleted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue:false
+    }
   },
   {
     tableName: "products",

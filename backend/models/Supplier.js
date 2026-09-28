@@ -24,6 +24,12 @@ const Supplier = sequelize.define(
       type: DataTypes.STRING(8),
       allowNull: false,
     },
+    is_deleted: {
+          type: DataTypes.BOOLEAN,
+          allowNull: false,
+      defaultValue:false
+
+        }
   },
   {
     tableName: "suppliers",

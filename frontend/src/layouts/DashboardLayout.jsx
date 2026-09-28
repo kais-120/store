@@ -18,7 +18,7 @@ const titles = {
 export default function DashboardLayout() {
   const [isOpen, setIsOpen] = useState(false)
   const location = useLocation()
-  const title = titles[location.pathname] || 'مغازة البركة'
+  const title = titles[location.pathname] || 'سوبرات محمد علي'
 
   return (
     <Flex h="100vh" bg="sand.100" overflow="hidden">

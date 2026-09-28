@@ -18,6 +18,21 @@ const initialValues = {
   items: [emptyItem()]
 }
 
+// Unit labels shown in the UI (add more if you use other units)
+const UNIT_LABELS = {
+  g: 'غ',
+  kg: 'كغ',
+  l: 'لتر',
+  ml: 'مل',
+  piece: 'قطعة',
+  pcs: 'قطعة'
+}
+
+const getUnitLabel = (unit) => {
+  if (!unit) return ''
+  return UNIT_LABELS[String(unit).toLowerCase()] || unit
+}
+
 const validationSchema = Yup.object().shape({
   supplier_id: Yup.string().required('الرجاء اختيار المورد'),
   date: Yup.string().required('الرجاء تحديد تاريخ الشراء'),
@@ -82,16 +97,26 @@ export default function PurchaseFormModal({ isOpen, onClose, onSave, isSaving })
   const isProductTakenElsewhere = (items, product_id, currentIndex) =>
     items.some((item, i) => i !== currentIndex && item.product_id === product_id)
 
+  const findProduct = (product_id) =>
+    products.find((p) => String(p.id) === String(product_id))
+
+  // Change this one line if your product field is not called "unit"
+  const getUnit = (product_id) => {
+    const product = findProduct(product_id)
+    return product ? getUnitLabel(product.unit) : ''
+  }
+
   const handleSubmit = (values, { resetForm }) => {
     const supplier = suppliers.find((s) => String(s.id) === String(values.supplier_id))
 
     const purchaseItems = values.items.map((item) => {
-      const product = products.find((p) => String(p.id) === String(item.product_id))
+      const product = findProduct(item.product_id)
       const quantity = Number(item.quantity)
       const purchase_price = Number(item.purchase_price)
       return {
         product_id: item.product_id,
         productName: product ? product.name : '',
+        unit: product ? product.unit : '',
         quantity,
         purchase_price,
         total: quantity * purchase_price
@@ -202,12 +227,14 @@ export default function PurchaseFormModal({ isOpen, onClose, onSave, isSaving })
                             {values.items.map((item, index) => {
                               const rowTotal = getRowTotal(item)
                               const itemErrors = getIn(errors, `items[${index}]`) || {}
+                              const unit = getUnit(item.product_id)
                               const availableProducts = products?.filter(
                                 (p) => !isProductTakenElsewhere(values.items, String(p.id), index)
                               )
                               const selectedStillVisible = availableProducts?.some(
                                 (p) => String(p.id) === String(item.product_id)
                               )
+                              const selectedProduct = findProduct(item.product_id)
 
                               return (
                                 <Box
@@ -227,12 +254,21 @@ export default function PurchaseFormModal({ isOpen, onClose, onSave, isSaving })
                                           setFieldValue(`items[${index}].product_id`, e.target.value)
                                         }
                                       >
-                                        {availableProducts?.map((p) => (
-                                          <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
+                                        {availableProducts?.map((p) => {
+                                          const u = getUnitLabel(p.unit)
+                                          return (
+                                            <option key={p.id} value={p.id}>
+                                              {u ? `${p.name} (${u})` : p.name}
+                                            </option>
+                                          )
+                                        })}
                                         {item.product_id && !selectedStillVisible && (
                                           <option value={item.product_id}>
-                                            {products.find((p) => String(p.id) === String(item.product_id))?.name}
+                                            {selectedProduct
+                                              ? unit
+                                                ? `${selectedProduct.name} (${unit})`
+                                                : selectedProduct.name
+                                              : ''}
                                           </option>
                                         )}
                                       </Select>
@@ -252,10 +288,13 @@ export default function PurchaseFormModal({ isOpen, onClose, onSave, isSaving })
 
                                   <HStack spacing={3} mt={3} align="flex-start">
                                     <FormControl isRequired isInvalid={!!itemErrors.quantity}>
-                                      <FormLabel fontSize="xs" fontWeight="600">الكمية</FormLabel>
+                                      <FormLabel fontSize="xs" fontWeight="600">
+                                        {unit ? `الكمية (${unit})` : 'الكمية'}
+                                      </FormLabel>
                                       <Input
                                         type="number"
                                         min={0}
+                                        step="any"
                                         value={item.quantity}
                                         onChange={(e) =>
                                           setFieldValue(`items[${index}].quantity`, e.target.value)
@@ -265,10 +304,14 @@ export default function PurchaseFormModal({ isOpen, onClose, onSave, isSaving })
                                     </FormControl>
 
                                     <FormControl isRequired isInvalid={!!itemErrors.purchase_price}>
-                                      <FormLabel fontSize="xs" fontWeight="600">سعر الوحدة</FormLabel>
+                                      <FormLabel fontSize="xs" fontWeight="600">
+                                        {unit === 'قطعة' ? 'سعر الوحدة' : unit === "غ" ? 'سعر 100غ' : `(${unit})`  }
+
+                                      </FormLabel>
                                       <Input
                                         type="number"
                                         min={0}
+                                        step="any"
                                         value={item.purchase_price}
                                         onChange={(e) =>
                                           setFieldValue(`items[${index}].purchase_price`, e.target.value)

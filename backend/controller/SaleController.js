@@ -4,6 +4,8 @@ const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const sequelize = require("../config/db");
 const { SaleItem, Product } = require("../models");
+const { computeLineTotal } = require("../utils/pricing");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const FIELDS = ["customer_id", "total_amount", "payment_method"];
 const PAYMENT_METHODS = ["cash", "debt"];
@@ -105,6 +107,7 @@ exports.getSaleById = [
 ];
 
 // ---------- POST /api/sales ----------
+
 exports.createSale = [
   ...saleRules(true),
 
@@ -161,7 +164,8 @@ exports.createSale = [
           ]);
         }
 
-        const lineTotal = Number(product.price) * Number(item.quantity);
+        // 'غ' products: qty in grams, price per 100 g (see pricing.js)
+        const lineTotal = computeLineTotal(product.price, item.quantity, product.unit);
         subtotal += lineTotal;
 
         saleItemsData.push({
@@ -181,7 +185,7 @@ exports.createSale = [
         ]);
       }
 
-      const totalAmount = subtotal - appliedDiscount;
+      const totalAmount = Number((subtotal - appliedDiscount).toFixed(3));
 
       const sale = await Sale.create(
         {
@@ -207,9 +211,17 @@ exports.createSale = [
         include: [{ model: SaleItem, as: "saleItem" }],
       });
 
+      await createActivityLog(
+        "sale",
+        "sale",
+        sale.id,
+        `Sale #${sale.id}`,
+        `تمت عملية بيع بقيمة ${Number(totalAmount).toFixed(3)} د.ت`
+      );
+
       res.status(201).json({ success: true, data: fullSale });
     } catch (err) {
-      await t.rollback();
+      if (!t.finished) await t.rollback();
       console.log(err);
       res.status(500).json({ success: false, message: "Something went wrong" });
     }
@@ -262,7 +274,7 @@ exports.deleteSale = [
     const sale = await Sale.findByPk(req.params.id);
     if (!sale) return res.status(404).json({ success: false, message: "Sale not found" });
 
-    await sale.destroy();
+    await sale.update({is_deleted:true});
     res.json({ success: true, message: "Sale deleted" });
   },
 ];

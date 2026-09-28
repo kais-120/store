@@ -11,6 +11,8 @@ import Customers from '../pages/Customers'
 import Accounts from '../pages/Accounts'
 import Reports from '../pages/Reports'
 import Settings from '../pages/Settings'
+import Categories from '../pages/Categories'
+import BackupPage from '../pages/BackupPage'
 
 function RequireAuth({ children }) {
   const { isAuthenticated } = useApp()
@@ -31,6 +33,8 @@ export default function AppRoutes() {
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/customers" element={<Customers />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/backup" element={<BackupPage />} />
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />

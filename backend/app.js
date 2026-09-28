@@ -12,9 +12,8 @@ const DashboardRoute = require("./router/DashboardRoute")
 const AccountRoute = require("./router/AccountRoute")
 const ReportRoutes = require("./router/ReportRoutes")
 const ExpenseRoute = require("./router/ExpenseRoute")
-
-
-
+const CategoryRoutes = require("./router/CategoryRoutes")
+const BackupRoute = require("./router/BackupRoute")
 
 
 
@@ -29,6 +28,10 @@ router.use("/dashboard",DashboardRoute)
 router.use("/account",AccountRoute)
 router.use("/report",ReportRoutes)
 router.use("/expense",ExpenseRoute)
+router.use("/category",CategoryRoutes)
+router.use('/backup',BackupRoute)
+
+
 
 
 
