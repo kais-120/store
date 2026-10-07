@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, VStack, HStack, Text, Flex, Icon, Divider } from '@chakra-ui/react'
+import { Box, VStack, HStack, Text, Flex, Icon, Divider, Skeleton  } from '@chakra-ui/react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Home, ShoppingCart, Package, Truck, Users, Wallet, BarChart3, Settings, LogOut, Store, Tags, DatabaseBackup } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
@@ -17,7 +17,7 @@ const navItems = [
 ]
 
 export default function Sidebar({ onNavigate }) {
-  const { logout } = useApp()
+  const { logout,shop,loading } = useApp()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -25,17 +25,49 @@ export default function Sidebar({ onNavigate }) {
     navigate('/login')
   }
 
-  return (
-    <Flex direction="column" h="100%" bg="brand.700" color="white" w="260px" py={5} px={3}>
-      <HStack px={2} mb={6} spacing={3}>
-        <Flex align="center" justify="center" w="42px" h="42px" borderRadius="lg" bg="gold.500" flexShrink={0}>
-          <Icon as={Store} boxSize={5} color="white" />
-        </Flex>
-        <Box>
-          <Text fontWeight="800" fontSize="lg" lineHeight="1.1">سوبرات محمد علي</Text>
-          <Text fontSize="xs" color="whiteAlpha.700">نظام إدارة المحل</Text>
-        </Box>
-      </HStack>
+ return (
+  <Flex direction="column" h="100%" bg="brand.700" color="white" w="260px" py={5} px={3}>
+    <HStack px={2} mb={6} spacing={3}>
+      {loading ? (
+        <>
+          <Skeleton
+            w="42px"
+            h="42px"
+            borderRadius="lg"
+            flexShrink={0}
+            startColor="brand.600"
+            endColor="brand.500"
+          />
+          <Box>
+            <Skeleton
+              h="18px"
+              w="120px"
+              mb={2}
+              borderRadius="md"
+              startColor="brand.600"
+              endColor="brand.500"
+            />
+            <Skeleton
+              h="12px"
+              w="90px"
+              borderRadius="md"
+              startColor="brand.600"
+              endColor="brand.500"
+            />
+          </Box>
+        </>
+      ) : (
+        <>
+          <Flex align="center" justify="center" w="42px" h="42px" borderRadius="lg" bg="gold.500" flexShrink={0}>
+            <Icon as={Store} boxSize={5} color="white" />
+          </Flex>
+          <Box>
+            <Text fontWeight="800" fontSize="lg" lineHeight="1.1">{shop}</Text>
+            <Text fontSize="xs" color="whiteAlpha.700">نظام إدارة المحل</Text>
+          </Box>
+        </>
+      )}
+    </HStack>
 
       <VStack align="stretch" spacing={1} flex="1" overflowY="auto">
         {navItems.map((item) => (

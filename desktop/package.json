@@ -1,0 +1,48 @@
+{
+  "name": "superette_mohamed_amine",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "electron": "electron .",
+    "dist": "electron-builder"
+
+  },
+   "build": {
+    "appId": "com.superette_mohamed_amine.id",
+    "productName": "Superette Mohamed Amine",
+    "asarUnpack": [
+    "backend/**/*"
+    ],
+    "files": [
+      "main.js",
+      "backend/**/*",
+      "frontend/**/*",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "icon": "assets/logo.png",
+      "target": "nsis"
+    },
+    "mac": {
+      "icon": "assets/logo.png"
+    },
+    "linux": {
+      "icon": "assets/logo.png",
+      "target": "AppImage"
+    }
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "electron-app": "^1.0.0"
+  },
+  "devDependencies": {
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
+  }
+}

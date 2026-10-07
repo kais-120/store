@@ -6,11 +6,13 @@ import {
 import { Eye, EyeOff, Store } from 'lucide-react'
 import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
+import LoadingPage from '../components/LoadingPage'
 
 export default function Login() {
-  const { login, isAuthenticated } = useApp()
+  const { login, isAuthenticated, shop,loading:loadingShop } = useApp()
   const navigate = useNavigate()
   const location = useLocation()
+  console.log(shop)
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -31,21 +33,21 @@ export default function Login() {
     return Object.keys(next).length === 0
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setAuthError('')
     if (!validate()) return
     setLoading(true)
-    setTimeout(() => {
-      const ok = login(username.trim(), password)
+
+      const ok = await login(username.trim(), password)
       setLoading(false)
       if (ok) {
         navigate(location.state?.from || '/dashboard', { replace: true })
       } else {
         setAuthError('اسم المستخدم أو كلمة المرور غير صحيحة')
       }
-    }, 600)
   }
+  if(loadingShop) return <LoadingPage />
 
   return (
     <Flex minH="100vh" align="center" justify="center" bg="brand.700" px={4}
@@ -55,7 +57,7 @@ export default function Login() {
           <Flex w="60px" h="60px" borderRadius="xl" bg="gold.500" align="center" justify="center" mb={2}>
             <Icon as={Store} boxSize={7} color="white" />
           </Flex>
-          <Heading size="lg" fontWeight="800">سوبرات محمد علي</Heading>
+          <Heading size="lg" fontWeight="800">{shop}</Heading>
           <Text color="ink.muted" fontSize="sm">نظام إدارة المحل</Text>
         </VStack>
 

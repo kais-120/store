@@ -2,7 +2,7 @@ import { Axios } from "../API/Api";
 
 // Auth
 
-export const Login = (data) => Axios.post("/auth/login",data)
+export const Auth = (username,password) => Axios.post("/auth/login",{username,password})
 
 
 // Product

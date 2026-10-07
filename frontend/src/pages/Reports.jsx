@@ -6,12 +6,11 @@ import {
 import { Download } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts'
 import PageHeader from '../components/common/PageHeader'
-import { useApp } from '../context/AppContext'
 import { categories, stockStatus } from '../data/products'
 import { formatMoney } from '../utils/format'
 import {
   getTodayRange, getWeekRange, getMonthRange, getCustomRange,
-  filterByDateRange, groupAmountByDay, formatDisplayDate,
+  formatDisplayDate,
 } from '../utils/reportDates'
 import { getReport, getReportInfo, getReportSalesTrend, getReportStatus } from '../services/api'
 
@@ -45,25 +44,24 @@ async function downloadReportPdf({ type, period, customStart, customEnd }) {
     params.set('endDate', customEnd)
   }
 
-  // const res = await fetch(`${REPORTS_API_BASE}/${type}?${params.toString()}`)
-const res = await getReport(type, params.toString())
+  const res = await getReport(type, params.toString())
 
-if (res.status !== 200) {
-  throw new Error(res.data?.message || 'تعذّر توليد التقرير')
-}
+  if (res.status !== 200) {
+    throw new Error(res.data?.message || 'تعذّر توليد التقرير')
+  }
 
-const blob = res.data
-const url = URL.createObjectURL(blob)
+  const blob = res.data
+  const url = URL.createObjectURL(blob)
 
-const a = document.createElement('a')
-a.href = url
-a.download = `${type}-report.pdf`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${type}-report.pdf`
 
-document.body.appendChild(a)
-a.click()
-a.remove()
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
 
-URL.revokeObjectURL(url)
+  URL.revokeObjectURL(url)
 }
 
 function KpiCard({ label, value, hint }) {
@@ -88,15 +86,14 @@ function EmptyState({ message }) {
 }
 
 export default function Reports() {
-  const { customers, suppliers, sales, purchases, expenses } = useApp()
   const [period, setPeriod] = useState('today')
   const [reportType, setReportType] = useState('sales')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [downloading, setDownloading] = useState(false)
-  const [status,setStatus] = useState({})
-  const [saleTrend,setSaleTrend] = useState([])
-  const [reportInfo,setReportInfo] = useState([])
+  const [status, setStatus] = useState({})
+  const [saleTrend, setSaleTrend] = useState([])
+  const [reportInfo, setReportInfo] = useState([])
 
   const toast = useToast()
 
@@ -110,70 +107,56 @@ export default function Reports() {
   const hasRange = Boolean(range.start && range.end)
 
 const filteredSales = useMemo(() => {
-  if (reportType !== 'sales' || !reportInfo?.sales) return []
-  return reportInfo.sales.map((s) => ({
-    id: s.id,
-    date: s.date,
-    customer: s.customer?.name || 'زبون عابر',
-    amount: s.total_amount,
-    method: s.payment_method === 'cash' ? 'نقدي' : 'دين',
+  if (reportType !== 'sales' || !reportInfo?.factures) return []
+  return reportInfo.factures.map((f) => ({
+    id: f.id,
+    date: f.date,
+    customer: f.customer,
+    amount: f.amount,
+    method: f.payment_method === 'cash' ? 'نقدي' : 'دين',
   }))
 }, [reportType, reportInfo])
 
-const filteredPurchases = useMemo(() => {
-  if (reportType !== 'purchases' || !reportInfo?.purchases) return []
-  return reportInfo.purchases.map((p) => ({
-    id: p.id,
-    date: p.date,
-    supplierName: p.supplier?.name || '-',
-    amount: p.total_amount,
-    status: p.status,
-  }))
-}, [reportType, reportInfo])
+  const filteredPurchases = useMemo(() => {
+    if (reportType !== 'purchases' || !reportInfo?.purchases) return []
+    return reportInfo.purchases.map((p) => ({
+      id: p.id,
+      date: p.date,
+      supplierName: p.supplier?.name || '-',
+      amount: p.total_amount,
+      status: p.status,
+    }))
+  }, [reportType, reportInfo])
 
- const filteredExpenses = useMemo(() => {
-  // date, label, amount already match reportService's shape as-is
-  return reportType === 'expenses' ? (reportInfo?.expenses || []) : []
-}, [reportType, reportInfo])
+  const filteredExpenses = useMemo(() => {
+    // date, label, amount already match reportService's shape as-is
+    return reportType === 'expenses' ? (reportInfo?.expenses || []) : []
+  }, [reportType, reportInfo])
 
-const products = useMemo(() => {
-  if (reportType !== 'inventory' || !reportInfo?.rows) return []
-  // reportService's inventory rows have no `id` — use the array index
-  return reportInfo.rows.map((r, i) => ({ id: i, ...r }))
-}, [reportType, reportInfo])
+  const products = useMemo(() => {
+    if (reportType !== 'inventory' || !reportInfo?.rows) return []
+    // reportService's inventory rows have no `id` — use the array index
+    return reportInfo.rows.map((r, i) => ({ id: i, ...r }))
+  }, [reportType, reportInfo])
 
-const inventoryByCategory = useMemo(() => {
-  if (!products.length) return []
-  const totals = new Map()
-  products.forEach((p) => totals.set(p.category, (totals.get(p.category) || 0) + p.stockValue))
-  return Array.from(totals, ([name, value]) => ({ name, value }))
-}, [products])
-
-  const totalSales = filteredSales.reduce((s, i) => s + i.amount, 0)
-  const totalPurchases = filteredPurchases.reduce((s, i) => s + i.amount, 0)
-  const totalExpenses = filteredExpenses.reduce((s, i) => s + i.amount, 0)
-  const avgSale = filteredSales.length ? totalSales / filteredSales.length : 0
-
-  const salesTrend = useMemo(
-    () => (hasRange ? groupAmountByDay(filteredSales, 'date', 'amount', range.start, range.end, period === 'week' ? 'weekday' : 'shortDate') : []),
-    [filteredSales, range, hasRange, period]
-  )
-  const trendHasData = salesTrend.some((d) => d.value > 0)
-
-  const hasUndatedSales = sales.some((s) => !s.date)
-
+  const inventoryByCategory = useMemo(() => {
+    if (!products.length) return []
+    const totals = new Map()
+    products.forEach((p) => totals.set(p.category, (totals.get(p.category) || 0) + p.stockValue))
+    return Array.from(totals, ([name, value]) => ({ name, value }))
+  }, [products])
 
   const categoryLabel = (id) => categories.find((c) => c.id === id)?.label || id
 
-const customersWithDebt = useMemo(() => {
-  if (reportType !== 'debts' || !reportInfo?.customersOwing) return []
-  return reportInfo.customersOwing.map((c) => ({ id: c.id, name: c.name, phone: c.phone, debt: c.balance }))
-}, [reportType, reportInfo])
+  const customersWithDebt = useMemo(() => {
+    if (reportType !== 'debts' || !reportInfo?.customersOwing) return []
+    return reportInfo.customersOwing.map((c) => ({ id: c.id, name: c.name, phone: c.phone, debt: c.balance }))
+  }, [reportType, reportInfo])
 
-const suppliersWithDebt = useMemo(() => {
-  if (reportType !== 'debts' || !reportInfo?.suppliersOwed) return []
-  return reportInfo.suppliersOwed.map((s) => ({ id: s.id, name: s.name, phone: s.phone, debt: s.balance }))
-}, [reportType, reportInfo])
+  const suppliersWithDebt = useMemo(() => {
+    if (reportType !== 'debts' || !reportInfo?.suppliersOwed) return []
+    return reportInfo.suppliersOwed.map((s) => ({ id: s.id, name: s.name, phone: s.phone, debt: s.balance }))
+  }, [reportType, reportInfo])
 
   const handleDownload = async (type) => {
     setDownloading(true)
@@ -192,24 +175,26 @@ const suppliersWithDebt = useMemo(() => {
     }
   }
 
-  useEffect(() => {
-      const dataShow = async (period) => {
-        try {
-          const [responseStatus,responseSalesTrend,responseReportInfo] = await Promise.all([
-            getReportStatus(period,customStart,customEnd),
-            getReportSalesTrend(period,customStart,customEnd),
-            getReportInfo(reportType,period,customStart,customEnd)
-          ])
-          setStatus(responseStatus.data)
-          setSaleTrend(responseSalesTrend.data.trend)
-          setReportInfo(responseReportInfo.data)
-        } catch (error) {
-          console.log('err', error)
-        }
-      }
-  
-      dataShow(period)
-    }, [period,hasRange,customStart,customEnd,reportType])
+useEffect(() => {
+  if (period === 'custom' && (!customStart || !customEnd)) return
+
+  const dataShow = async () => {
+    try {
+      const [responseStatus, responseSalesTrend, responseReportInfo] = await Promise.all([
+        getReportStatus(period, customStart, customEnd),
+        getReportSalesTrend(period, customStart, customEnd),
+        getReportInfo(reportType, period, customStart, customEnd),
+      ])
+      setStatus(responseStatus.data)
+      setSaleTrend(responseSalesTrend.data.trend)
+      setReportInfo(responseReportInfo.data)
+    } catch (error) {
+      console.log('err', error)
+    }
+  }
+
+  dataShow()
+}, [period, customStart, customEnd, reportType])
 
   return (
     <Box>
@@ -270,7 +255,7 @@ const suppliersWithDebt = useMemo(() => {
         <CardBody>
           {!hasRange ? (
             <EmptyState message="اختر تاريخي البداية والنهاية لعرض الاتجاه." />
-          ) : !saleTrend ? (
+          ) : !saleTrend?.length ? (
             <EmptyState message="لا توجد مبيعات مسجلة بتاريخ ضمن هذه الفترة." />
           ) : (
             <Box h="240px">
@@ -325,35 +310,28 @@ const suppliersWithDebt = useMemo(() => {
           {reportType === 'sales' && (
             !hasRange ? <EmptyState message="اختر فترة صالحة لعرض المبيعات." /> :
             filteredSales.length === 0 ? <EmptyState message="لا توجد عمليات بيع مسجلة بتاريخ ضمن هذه الفترة." /> : (
-              <>
-                <Table size="sm">
-                  <Thead>
-                    <Tr>
-                      <Th>التاريخ</Th>
-                      <Th>رقم العملية</Th>
-                      <Th>الحريف</Th>
-                      <Th>المبلغ</Th>
-                      <Th>طريقة الدفع</Th>
+              <Table size="sm">
+                <Thead>
+                  <Tr>
+                    <Th>التاريخ</Th>
+                    <Th>رقم العملية</Th>
+                    <Th>الحريف</Th>
+                    <Th>المبلغ</Th>
+                    <Th>طريقة الدفع</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {filteredSales.map((s) => (
+                    <Tr key={s.id}>
+                      <Td>{s.date}</Td>
+                      <Td>{s.id}</Td>
+                      <Td>{s.customer}</Td>
+                      <Td fontWeight="700">{formatMoney(s.amount)}</Td>
+                      <Td><Badge>{s.method}</Badge></Td>
                     </Tr>
-                  </Thead>
-                  <Tbody>
-                    {filteredSales.map((s) => (
-                      <Tr key={s.id}>
-                        <Td>{s.date}</Td>
-                        <Td>{s.id}</Td>
-                        <Td>{s.customer}</Td>
-                        <Td fontWeight="700">{formatMoney(s.amount)}</Td>
-                        <Td><Badge>{s.method}</Badge></Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-                {hasUndatedSales && (
-                  <Text fontSize="xs" color="ink.muted" mt={3}>
-                    * بعض عمليات البيع القديمة غير مسجلة بتاريخ، ولذلك لا تظهر ضمن أي تصفية زمنية.
-                  </Text>
-                )}
-              </>
+                  ))}
+                </Tbody>
+              </Table>
             )
           )}
 
@@ -403,8 +381,8 @@ const suppliersWithDebt = useMemo(() => {
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {filteredExpenses.map((e) => (
-                    <Tr key={e.id}>
+                  {filteredExpenses.map((e, i) => (
+                    <Tr key={e.id ?? i}>
                       <Td>{e.date}</Td>
                       <Td>{e.label}</Td>
                       <Td fontWeight="700">{formatMoney(e.amount)}</Td>
@@ -453,7 +431,7 @@ const suppliersWithDebt = useMemo(() => {
                 </Thead>
                 <Tbody>
                   {products.map((p) => {
-                    const status = stockStatus(p)
+                    const stock = stockStatus(p)
                     return (
                       <Tr key={p.id}>
                         <Td>{p.name}</Td>
@@ -463,7 +441,7 @@ const suppliersWithDebt = useMemo(() => {
                         <Td>{formatMoney(p.price)}</Td>
                         <Td>{formatMoney(p.purchasePrice)}</Td>
                         <Td fontWeight="700">{formatMoney(p.stock * p.purchasePrice)}</Td>
-                        <Td><Badge colorScheme={status.key === 'ok' ? 'green' : status.key === 'low' ? 'orange' : 'red'}>{status.label}</Badge></Td>
+                        <Td><Badge colorScheme={stock.key === 'ok' ? 'green' : stock.key === 'low' ? 'orange' : 'red'}>{stock.label}</Badge></Td>
                       </Tr>
                     )
                   })}
